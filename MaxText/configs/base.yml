@@ -80,6 +80,7 @@ head_dim: 128
 # mixture of experts (moe)
 num_experts: 1
 num_experts_per_tok: 1
+moe_matmul: False
 mlp_activations: ["silu", "linear"]
 dropout_rate: 0
 logits_via_embedding: False
@@ -206,8 +207,10 @@ load_from_prefill_dir: False # If true, decode.py doesn't "prefill" but just rea
 prefill_cache_dir: "" # If set and load_from_prefill_dir, decode.py reads from directory. If set, decode.py writes to directory
 autoregressive_decode_assert: ""
 
-enable_profiler: False
-# If set to true, upload all profiler xplane results from all hosts. Otherwise, only upload the xplane result from the first host.
+# For nsys profiler, pass the training command to nsys command
+# e.g. nsys profile -s none --force-overwrite true --capture-range=cudaProfilerApi --capture-range-end=stop {training command} 
+profiler: "" # Supported profiler: '', xplane, nsys
+# If set to true, upload all profiler results from all hosts. Otherwise, only upload the profiler result from the first host.
 upload_all_profiler_results: False
 # Skip first n steps for profiling, to omit things like compilation and to give
 # the iteration time a chance to stabilize.
@@ -284,3 +287,6 @@ inference_microbenchmark_log_file_path: ""
 # Checkpoint Structured logging
 enable_checkpoint_cloud_logger: False
 enable_checkpoint_standard_logger: False
+
+# Single-controller
+enable_single_controller: False
