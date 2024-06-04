@@ -50,7 +50,7 @@ logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 
 _WARMUP_BATCHES = 2 # Number of batches in dataset used for warmup
 _PREFILL_LENGTH = 1024 # For padding input tokens
-_NUM_PROFILES = 0 # Number of batches to profile
+_NUM_PROFILES = 1 # Number of batches to profile
 
 # Stages
 _PREFILL = 'prefill'

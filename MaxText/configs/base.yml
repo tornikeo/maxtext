@@ -208,8 +208,10 @@ prefill_cache_dir: "" # If set and load_from_prefill_dir, decode.py reads from d
 autoregressive_decode_assert: ""
 
 # For nsys profiler, pass the training command to nsys command
-# e.g. nsys profile -s none --force-overwrite true --capture-range=cudaProfilerApi --capture-range-end=stop {training command} 
+# e.g. nsys profile -s none --force-overwrite true --capture-range=cudaProfilerApi --capture-range-end=stop {training command}
 profiler: "" # Supported profiler: '', xplane, nsys
+# output dir
+tensorboard_dir: /tmp/tensorboard
 # If set to true, upload all profiler results from all hosts. Otherwise, only upload the profiler result from the first host.
 upload_all_profiler_results: False
 # Skip first n steps for profiling, to omit things like compilation and to give
@@ -275,7 +277,7 @@ vertex_tensorboard_project: ""
 # Vertex AI supported regions: https://cloud.google.com/vertex-ai/docs/general/locations#available-regions
 vertex_tensorboard_region: ""
 
-# If set to True, MaxText will perform extra checks using jax.checkify. Note that this will effect performance. 
+# If set to True, MaxText will perform extra checks using jax.checkify. Note that this will effect performance.
 max_checkify: False
 
 # Inference
@@ -283,6 +285,7 @@ inference_microbenchmark_prefill_lengths: "64,128,256,512,1024"
 inference_microbenchmark_stages: "prefill,generate"
 inference_microbenchmark_loop_iters: 10
 inference_microbenchmark_log_file_path: ""
+inference_benchmark_dataset_file_path: ""
 
 # Checkpoint Structured logging
 enable_checkpoint_cloud_logger: False
