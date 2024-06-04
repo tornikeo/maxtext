@@ -172,24 +172,28 @@ def benchmark_prefill_insert(config, engine, decode_state, params, tokens,
     prof = profiler.Profiler(config, profile_name)
     prof.activate()
   start = datetime.datetime.now()
+  decode_states = [decode_state]
   for i in range(batch_size):
     slot = int(i % total_slots)
-    prefill_result = engine.prefill(
-      params=params, padded_tokens=tokens[i], true_length=true_lengths[i]
+    decode_states.append(
+      engine.insert(
+        engine.prefill(
+          params=params, padded_tokens=tokens[i], true_length=true_lengths[i]
+          ),
+        decode_states.pop(0), slot
       )
-    decode_state = engine.insert(prefill_result, decode_state, slot)
-  jax.block_until_ready(decode_state)
+    )
+  jax.block_until_ready(decode_states)
   end = datetime.datetime.now()
   if not skip_profiling:
     prof.deactivate()
-  max_utils.delete_pytree(prefill_result)
   # Stats
   time_seconds = (end - start).total_seconds()
   stats = {
     _MSEC_PROFILED: round(time_seconds*1000),
     _MSEC_PER_SEQ: round(time_seconds*1000/(batch_size), 2)
   }
-  return stats, decode_state
+  return stats, decode_states.pop(0)
 
 def benchmark_autoregressive(config, engine, decode_state, params, start_row, end_row, skip_profiling=True):
   '''Benchmarking autoregressive step.'''
@@ -313,7 +317,7 @@ def main(config):
       idx = j - start_row
       prefill_tokens[idx], prefill_true_lengths[idx] = token_utils.tokenize_and_pad(
         text, vocab, is_bos=True, prefill_lengths=[_PREFILL_LENGTH])
-    _, _ = benchmark(config, engine, decode_state, params, prefill_tokens,
+    batch_stats, output_tokens = benchmark(config, engine, decode_state, params, prefill_tokens,
                      prefill_true_lengths, start_row, end_row, skip_profiling=True)
 
 
