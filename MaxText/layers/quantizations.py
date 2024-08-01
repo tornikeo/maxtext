@@ -190,22 +190,22 @@ def _get_int8_quant_config(config):
     drhs_accumulator_dtype=drhs_accumulator_dtype,
     )
 
-
-def _get_weight_only_quant_config(lhs_bits=None, rhs_bits=None):
+def _get_int_quant_config(lhs_bits=None, rhs_bits=None):
   return aqt_config.dot_general_make(lhs_bits=lhs_bits, rhs_bits=rhs_bits)
 
 
-def _get_mixed_precision_quant_config(config, config_file):
+def _get_mixed_precision_quant_config(config, config_file, lhs_bits=None):
   """Set quantization params based on user configuration."""
   with open(config_file, "r") as infile:
     mixed_precision_config = json.load(infile)
   ret_config = {}
-  ret_config["default"] = [aqt_config.dot_general_make(lhs_bits=None, rhs_bits=8), -1]
+  ret_config["default"] = [aqt_config.dot_general_make(lhs_bits=lhs_bits, rhs_bits=8), -1]
   for layer_name_re, layer_quantization_config in mixed_precision_config.items():
     rhs_num_bits = layer_quantization_config.get("bits", 8)
+    lhs_num_bits = max(rhs_num_bits, lhs_bits) if lhs_bits else None
     tile_size = layer_quantization_config.get("tile_size", -1)
     scale = layer_quantization_config.get("scale", 1.0)
-    aqt_dg = aqt_config.dot_general_make(lhs_bits=None, rhs_bits=rhs_num_bits)
+    aqt_dg = aqt_config.dot_general_make(lhs_bits=lhs_num_bits, rhs_bits=rhs_num_bits)
     if scale < 1.0:
       aqt_dg.fwd.dg_quantizer.rhs.calibration = functools.partial(
         calibration.AbsMaxCalibration, scale=scale)
@@ -219,13 +219,24 @@ def _get_quant_config(config):
     return None
   if config.quantization == "int8":
     return _get_int8_quant_config(config)
+  if config.quantization == "int4":
+    return _get_int_quant_config(lhs_bits=4, rhs_bits=4)
+  if config.quantization == "int4_8":
+    return _get_int_quant_config(lhs_bits=8, rhs_bits=8)
   if config.quantization == "int8w":
-    return _get_weight_only_quant_config(lhs_bits=None, rhs_bits=8)
+    return _get_int_quant_config(lhs_bits=None, rhs_bits=8)
   if config.quantization == "int4w":
-    return _get_weight_only_quant_config(lhs_bits=None, rhs_bits=4)
+    return _get_int_quant_config(lhs_bits=None, rhs_bits=4)
+  if config.quantization == "intmp4":
+    assert config.quant_cfg_path, "Must specify quant_cfg for mixed precision quantization"
+    return _get_mixed_precision_quant_config(config, config.quant_cfg_path, lhs_bits=4)
+  if config.quantization == "intmp8":
+    assert config.quant_cfg_path, "Must specify quant_cfg for mixed precision quantization"
+    return _get_mixed_precision_quant_config(config, config.quant_cfg_path, lhs_bits=8)
   if config.quantization == "intmp":
     assert config.quant_cfg_path, "Must specify quant_cfg for mixed precision quantization"
-    return _get_mixed_precision_quant_config(config, config.quant_cfg_path)
+    return _get_mixed_precision_quant_config(config, config.quant_cfg_path, lhs_bits=None)
+
   if config.quantization == "fp8":
     return "fp8"
   raise ValueError(f"Invalid value configured for quantization {config.quantization}.")
