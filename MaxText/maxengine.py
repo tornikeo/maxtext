@@ -471,7 +471,7 @@ def create_engine_from_config_flags(batch_size, max_prefill_predict_length, max_
   #args.append("")
 
   #args.append("model_name=llama2-70b")
-  #args.append("tokenizer_path=/home/vipannalla/maxtext/assets/tokenizer.llama2")
+  #args.append("tokenizer_path=~/maxtext/assets/tokenizer.llama2")
   # quantization related
   #args.append("checkpoint_is_quantized=True")
   #args.append("load_parameters_path=gs://msingh-bkt/checkpoints/quant_llama2-70b-chat/mlperf_070924/int8_")

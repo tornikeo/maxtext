@@ -148,7 +148,7 @@ def _classify_query(dataset_rows, index):
   # return grouped indexes
   sample = dataset_rows[index][1]
   input_len = sample.tok_input_length
-  total_len = sample.tok_input_length + 3*sample.tok_output_length
+  total_len = sample.tok_input_length + 1.5*sample.tok_output_length
   len_batch_str = FLAGS.prefill_lengths_and_batch_sizes
   target_inputs = [int(lb.split(',')[0]) for lb in len_batch_str.split('|')]
   target_totals = [2*inp for inp in target_inputs]
@@ -169,7 +169,7 @@ def _pick_batch_size(num_samples, max_batch, dataset_size, sample_size):
   return math.ceil(num_samples / mult * (sample_size / dataset_size))
 
 def get_warmup_samples(dataset):
-  groupped_queries = [[], [], []] 
+  groupped_queries = [[], [], []]
   pandas_rows = list(dataset.iterrows())
   input_data = {}
   for sample_id in range(len(pandas_rows)):
@@ -181,9 +181,9 @@ def get_warmup_samples(dataset):
   for data in input_data.values():
     # make sure tokens are transferred to device
     jax.block_until_ready(data.tokens)
-  sample_id_to_input = input_data 
+  sample_id_to_input = input_data
   for sample_id in range(len(input_data)):
-    group = _classify_query(pandas_rows, sample_id)  
+    group = _classify_query(pandas_rows, sample_id)
     input_ = copy.copy(sample_id_to_input[sample_id])
     input_.id = sample_id
     groupped_queries[group].append(input_)
