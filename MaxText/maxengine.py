@@ -470,19 +470,19 @@ def create_engine_from_config_flags(batch_size, max_prefill_predict_length, max_
   args.append("attention=dot_product")
   #args.append("")
 
-  #args.append("model_name=llama2-70b")
-  #args.append("tokenizer_path=~/maxtext/assets/tokenizer.llama2")
+  args.append("model_name=llama2-70b")
+  args.append("tokenizer_path=/home/msingh/maxtext/assets/tokenizer.llama2")
   # quantization related
-  #args.append("checkpoint_is_quantized=True")
+  args.append("checkpoint_is_quantized=True")
   #args.append("load_parameters_path=gs://msingh-bkt/checkpoints/quant_llama2-70b-chat/mlperf_070924/int8_")
   #args.append(f"load_parameters_path={checkpoint_path}")
   #args.append("quantization=int8")
-  #args.append("quantize_kvcache=True")
+  args.append("quantize_kvcache=True")
 
   # axis tuning related
-  #args.append("compute_axis_order=0,1,2,3")
-  #args.append("prefill_cache_axis_order=0,1,2,3")
-  #args.append("ar_cache_axis_order=0,1,2,3")
+  args.append("compute_axis_order=0,1,2,3")
+  args.append("prefill_cache_axis_order=0,1,2,3")
+  args.append("ar_cache_axis_order=0,1,2,3")
 
   # batch and cache related
   args.append(f"max_prefill_predict_length={max_prefill_predict_length}")
