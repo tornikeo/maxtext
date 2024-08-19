@@ -6,14 +6,16 @@ dry_run=false
 model='llama2-7b'
 script_name='decode'
 run_name='$(date +'%Y%m%d%H%M%S')'
+mp_config="mp_scale"
 
-while getopts "nm:r:s:" opt
+while getopts "nm:r:s:c:" opt
 do
   case "$opt" in
       n ) dry_run=true ;;
       m ) model="$OPTARG" ;;
       r ) run_name="$OPTARG" ;;
       s ) script_name="$OPTARG" ;;
+      c ) mp_config="$OPTARG" ;;
       ? ) helpFunction ;; # Print helpFunction in case parameter is non-existent
   esac
 done
@@ -35,7 +37,7 @@ export SCAN_LAYERS=false
 export WEIGHT_DTYPE=bfloat16
 export PER_DEVICE_BATCH_SIZE=11
 export QUANTIZATION="intmp"
-export QUANT_CFG="mp_scale"
+export QUANT_CFG=${mp_config}
 export QUANT_CFG_PATH="MaxText/configs/quantization/${QUANT_CFG}.json"
 export QUANTIZE_KVCACHE=False
 export CHKPT_SUBDIR="${run_name}/${QUANTIZATION}_${QUANT_CFG}"

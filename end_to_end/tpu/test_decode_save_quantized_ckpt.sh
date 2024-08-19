@@ -5,13 +5,15 @@
 dry_run=false
 model='llama2-7b'
 run_name=$(date +'%Y%m%d%H%M%S')
+mp_config="mp_scale"
 
-while getopts "nm:r:" opt
+while getopts "nm:r:c:" opt
 do
   case "$opt" in
       n ) dry_run=true ;;
       m ) model="$OPTARG" ;;
       r ) run_name="$OPTARG" ;;
+      c ) mp_config="$OPTARG" ;;
       ? ) helpFunction ;; # Print helpFunction in case parameter is non-existent
   esac
 done
@@ -33,16 +35,16 @@ fi
 export MODEL_NAME=${model}
 export TOKENIZER_PATH=assets/tokenizer.llama2
 export LOAD_PARAMETERS_PATH=gs://inference-benchmarks/models/${MODEL_NAME}-chat/${checkpoint_ts}/param-only-decode-ckpt-maxtext/checkpoints/0/items
-export MAX_PREFILL_PREDICT_LENGTH=1024
-export MAX_TARGET_LENGTH=2048
+export MAX_PREFILL_PREDICT_LENGTH=128
+export MAX_TARGET_LENGTH=128
 export ICI_FSDP_PARALLELISM=1
 export ICI_AUTOREGRESSIVE_PARALLELISM=1
 export ICI_TENSOR_PARALLELISM=-1
 export SCAN_LAYERS=false
 export WEIGHT_DTYPE=bfloat16
-export PER_DEVICE_BATCH_SIZE=11
+export PER_DEVICE_BATCH_SIZE=48
 export QUANTIZATION="intmp"
-export QUANT_CFG="mp_scale"
+export QUANT_CFG=${mp_config}
 export QUANT_CFG_PATH="MaxText/configs/quantization/${QUANT_CFG}.json"
 export QUANTIZE_KVCACHE=False
 export CHKPT_SUBDIR="${run_name}/${QUANTIZATION}_${QUANT_CFG}"
