@@ -1,10 +1,33 @@
 #!/usr/bin/env bash
-me=$(basename "$0")
+
+# Example:
+# bash offline_run_llama.sh -r drq -c mp_v0 -u user_5000.conf -n
+
+dry_run=false
+run_name='$(date +'%Y%m%d%H%M%S')'
+mp_config="mp_scale"
+user_conf="user.conf"
+
+while getopts "nr:c:u:" opt
+do
+  case "$opt" in
+      n ) dry_run=true ;;
+      r ) run_name="$OPTARG" ;;
+      c ) mp_config="$OPTARG" ;;
+      u ) user_conf="$OPTARG" ;;
+      ? ) helpFunction ;; # Print helpFunction in case parameter is non-existent
+  esac
+done
+
+if "$dry_run"; then
+    cmd=echo
+else
+    cmd=''
+fi
 
 
 export BASEDIR=/home/msingh/inference_mlperf4.1
-#export USER_CONFIG=$BASEDIR/language/llama2-70b/tpu/user.conf
-export USER_CONFIG=/home/msingh/maxtext/MaxText/user.conf
+export USER_CONFIG=/home/msingh/maxtext/MaxText/${user_conf}
 export DATA_DISK_DIR=/home/msingh/loadgen_run_data
 export API_URL=0.0.0.0:9000
 export DATASET_TYPE=full
@@ -16,9 +39,9 @@ export MODEL_NAME=llama70b
 export BATCH_SIZE_EXP=8
 # HF model id
 export BATCH_AND_PREFILL_LEN="256,96|512,48|1024,24"
-export QUANT="int4_8"
-export QUANT_CFG="" #configs/quantization/mp_scale.json"
-export SAVE_QUANT_PARAMS_PATH="gs://msingh-bkt/checkpoints/quant_llama2-70b-chat/post_mlperf/int4_8_"
+export QUANT="intmp"
+export QUANT_CFG="configs/quantization/${mp_config}.json"
+export SAVE_QUANT_PARAMS_PATH="gs://msingh-bkt/checkpoints/quant_llama2-70b-chat/${run_name}/${QUANT}_${mp_config}"
 export MAXENGINE_ARGS=" quantization=${QUANT} quant_cfg_path=${QUANT_CFG} load_parameters_path=${SAVE_QUANT_PARAMS_PATH} "
 
 LOADGEN_RUN_TIMESTAMP=$(TZ=America/Los_Angeles date +%Y%m%d%H%M%S%Z)
@@ -31,7 +54,7 @@ export LIBTPU_INIT_ARGS
 
 run_loadgen() {
 
-  OUTPUT_LOG_ID=${MODEL_NAME}-${DATASET_TYPE}-${LOADGEN_RUN_TYPE}-${LOADGEN_RUN_TIMESTAMP}
+  OUTPUT_LOG_ID=${MODEL_NAME}-${DATASET_TYPE}-${QUANT}-${mp_config}-${LOADGEN_RUN_TYPE}-${LOADGEN_RUN_TIMESTAMP}
   OUTPUT_LOG_DIR=${DATA_DISK_DIR}/logs/${OUTPUT_LOG_ID}
   mkdir -p ${OUTPUT_LOG_DIR} && cp ${USER_CONFIG} ${OUTPUT_LOG_DIR}
   OUTPUT_ACCURACY_JSON_PATH=${OUTPUT_LOG_DIR}/mlperf_log_accuracy.json
@@ -45,7 +68,7 @@ run_loadgen() {
   echo "BATCH_AND_PREFILL_LEN: ${BATCH_AND_PREFILL_LEN}"
   echo "MAXENGINE_ARGS: ${MAXENGINE_ARGS}"
 
-  ${CMD} python -m offline_mode \
+  ${cmd} python -m offline_mode \
     --mlperf_test_mode=${TEST_MODE} \
 	  --input_mode tokenized \
     --output_mode tokenized \
@@ -89,8 +112,6 @@ run_loadgen_accuracy () {
   fi
 }
 
-CMD="echo"
-CMD=""
 
 # echo
 # echo "Starting loadgen performance run"
