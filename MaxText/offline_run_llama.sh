@@ -42,7 +42,7 @@ export BATCH_AND_PREFILL_LEN="256,96|512,48|1024,24"
 export QUANT="intmp"
 export QUANT_CFG="configs/quantization/${mp_config}.json"
 export SAVE_QUANT_PARAMS_PATH="gs://msingh-bkt/checkpoints/quant_llama2-70b-chat/${run_name}/${QUANT}_${mp_config}"
-export MAXENGINE_ARGS=" quantization=${QUANT} quant_cfg_path=${QUANT_CFG} load_parameters_path=${SAVE_QUANT_PARAMS_PATH} "
+export MAXENGINE_ARGS="quantization=${QUANT},quant_cfg_path=${QUANT_CFG},load_parameters_path=${SAVE_QUANT_PARAMS_PATH}"
 
 LOADGEN_RUN_TIMESTAMP=$(TZ=America/Los_Angeles date +%Y%m%d%H%M%S%Z)
 

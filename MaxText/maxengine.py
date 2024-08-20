@@ -458,9 +458,8 @@ class MaxEngine(engine_api.Engine):
 def create_engine_from_config_flags(batch_size, max_prefill_predict_length, max_target_length, args_str):
   import copy
   import pyconfig
-  args_str = "MaxText/maxengine_server.py configs/base.yml " + args_str
-  args = [b for b in args_str.split(' ') if len(b) > 0]
-
+  args_str = "MaxText/maxengine_server.py,configs/base.yml," + args_str
+  args = [b for b in args_str.split(',') if len(b) > 0]
   args.append("scan_layers=false")
   args.append("async_checkpointing=false")
   args.append("ici_fsdp_parallelism=1")
@@ -473,11 +472,11 @@ def create_engine_from_config_flags(batch_size, max_prefill_predict_length, max_
   args.append("model_name=llama2-70b")
   args.append("tokenizer_path=/home/msingh/maxtext/assets/tokenizer.llama2")
   # quantization related
+  args.append("quantize_kvcache=True")
   args.append("checkpoint_is_quantized=True")
   #args.append("load_parameters_path=gs://msingh-bkt/checkpoints/quant_llama2-70b-chat/mlperf_070924/int8_")
   #args.append(f"load_parameters_path={checkpoint_path}")
   #args.append("quantization=int8")
-  args.append("quantize_kvcache=True")
 
   # axis tuning related
   args.append("compute_axis_order=0,1,2,3")
@@ -488,6 +487,9 @@ def create_engine_from_config_flags(batch_size, max_prefill_predict_length, max_
   args.append(f"max_prefill_predict_length={max_prefill_predict_length}")
   args.append(f"max_target_length={max_target_length}")
   args.append(f"per_device_batch_size={batch_size}")
+  print("ARGS-MITALI")
+  print(args_str)
+  print(args)
   pyconfig.initialize(args)
   cfg = MaxEngineConfig(copy.deepcopy(pyconfig._config.keys))
   engine = MaxEngine(cfg)
