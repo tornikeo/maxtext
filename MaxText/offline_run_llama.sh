@@ -38,7 +38,7 @@ export LOG_INTERVAL=900
 export MODEL_NAME=llama70b
 export BATCH_SIZE_EXP=8
 # HF model id
-export BATCH_AND_PREFILL_LEN="256,96|512,48|1024,24"
+export BATCH_AND_PREFILL_LEN="256,80|512,40|1024,20"
 export QUANT="intmp"
 export QUANT_CFG="configs/quantization/${mp_config}.json"
 export SAVE_QUANT_PARAMS_PATH="gs://msingh-bkt/checkpoints/quant_llama2-70b-chat/${run_name}/${QUANT}_${mp_config}"
