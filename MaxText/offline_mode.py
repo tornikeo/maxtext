@@ -95,16 +95,17 @@ flags.DEFINE_integer(
     "Number of samples to use in benchmark.",
     required=False,
 )
-flags.DEFINE_bool(
-    "skip_warmup",
-    False,
-    "Skip warmup.",
-    required=False,
-)
+
 flags.DEFINE_string(
     "output_log_dir",
     "output-logs",
     "Where logs are saved.",
+    required=False,
+)
+flags.DEFINE_bool(
+    "skip_warmup",
+    False,
+    "Skip warmup",
     required=False,
 )
 flags.DEFINE_bool(
@@ -181,7 +182,7 @@ def init_grouped_queries():
   
 
 def get_warmup_samples(dataset):
-  grouped_queries = input_grouped_queries()
+  grouped_queries = init_grouped_queries()
   warmup_samples = grouped_queries
   pandas_rows = list(dataset.iterrows())
   input_data = {}
@@ -270,7 +271,7 @@ class SUT:
     for group_idx, group in enumerate(self._grouped_queries):
       log.info(f"Flush queries processing {group_idx} with {len(group)} samples")
       self.offline_inf[group_idx].init_decode_state()
-      result = self.offline_inf[group_idx].batch_inference(group)
+      result = self.offline_inf[group_idx].batch_inference(group, f"batch-{group_idx}")
       self.offline_inf[group_idx].decode_state = None
       gc.collect()
       for key, val in result.items():
@@ -357,7 +358,11 @@ def main(argv):
 
   log.info("dataset path: %s", FLAGS.dataset_path)
   dataset = pd.read_pickle(FLAGS.dataset_path)
+  if FLAGS.total_sample_count < len(dataset):
+    dataset = dataset.sample(FLAGS.total_sample_count)
+  
   rows = list(dataset.iterrows())
+  print(f"Num rows in dataset: {len(rows)}")
   counts_by_bucket = _count_by_bucket(dataset)
   log.info(f"Counts by bucket {counts_by_bucket}")
 
@@ -366,12 +371,11 @@ def main(argv):
   log.info(f"Maxengine args: {FLAGS.maxengine_args}")
   length_and_batch = [tuple(map(int, lb.split(','))) for lb in len_batch_str.split('|')]
   
-  
+  warmup_samples = None
   if not FLAGS.skip_warmup:
+    print("Get warmup samples")
     warmup_samples = get_warmup_samples(dataset)
-  else:
-    "Skipping warmup."
-    warmup_samples = None
+
   engines = []
   params = None
   base_engine = None
@@ -391,7 +395,10 @@ def main(argv):
     params = offline_inf.params
     engines.append(offline_inf)
 
-  if warmup_samples:
+  if FLAGS.skip_warmup:
+    log.info("Skipping warmup")
+  else:
+    log.info("Starting warmup:")
     with timed("warmup"):
       warmup_grp = 0
       for (length, _), engine in zip(length_and_batch, engines):
@@ -401,6 +408,7 @@ def main(argv):
         engine.decode_state = None  # drop state
         gc.collect()
         warmup_grp += 1
+    log.info("Finished warmup")
 
   sut = SUT(dataset, engines)
 
