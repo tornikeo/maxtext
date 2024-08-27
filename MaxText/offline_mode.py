@@ -35,7 +35,13 @@ import offline_inference
 
 _MLPERF_ID="llama2-70b"
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(
+  format='%(asctime)s - %(message)s', 
+  level=logging.INFO, 
+  datefmt='%Y-%m-%d %H:%M:%S.%f'
+  )
+import warnings
+warnings.simplefilter("ignore", category=FutureWarning)
 
 sys.path.insert(0, os.getcwd())
 log = logging.getLogger("main2.py")
@@ -54,7 +60,6 @@ flags.DEFINE_string(
     "api_url", None, "SAX published model path.", required=False
 )
 flags.DEFINE_string("dataset_path", None, "", required=False)
-flags.DEFINE_bool("is_stream", False, "", required=False)
 flags.DEFINE_string(
     "input_mode",
     "tokenized",
@@ -90,10 +95,10 @@ flags.DEFINE_integer(
     "Number of samples to use in benchmark.",
     required=False,
 )
-flags.DEFINE_integer(
-    "perf_count_override",
-    None,
-    "Overwrite number of samples to use in benchmark.",
+flags.DEFINE_bool(
+    "skip_warmup",
+    False,
+    "Skip warmup.",
     required=False,
 )
 flags.DEFINE_string(
@@ -124,7 +129,6 @@ flags.DEFINE_string(
 
 scenario_map = {
     "offline": lg.TestScenario.Offline,
-    "server": lg.TestScenario.Server,
 }
 
 
@@ -168,8 +172,17 @@ def _pick_batch_size(num_samples, max_batch, dataset_size, sample_size):
   mult = math.ceil(num_samples / max_batch)
   return math.ceil(num_samples / mult * (sample_size / dataset_size))
 
+def init_grouped_queries():
+  grouped_queries = []
+  num_groups = len(FLAGS.prefill_lengths_and_batch_sizes.split('|'))
+  for i in range(num_groups):
+    grouped_queries.append([])
+  return grouped_queries
+  
+
 def get_warmup_samples(dataset):
-  groupped_queries = [[], [], []]
+  grouped_queries = input_grouped_queries()
+  warmup_samples = grouped_queries
   pandas_rows = list(dataset.iterrows())
   input_data = {}
   for sample_id in range(len(pandas_rows)):
@@ -183,10 +196,10 @@ def get_warmup_samples(dataset):
     jax.block_until_ready(data.tokens)
   sample_id_to_input = input_data
   for sample_id in range(len(input_data)):
-    group = _classify_query(pandas_rows, sample_id)
+    group = 0 if len(grouped_queries) == 1 else _classify_query(pandas_rows, sample_id)
     input_ = copy.copy(sample_id_to_input[sample_id])
     input_.id = sample_id
-    groupped_queries[group].append(input_)
+    grouped_queries[group].append(input_)
 
   interesting_buckets = [
       0,
@@ -198,15 +211,15 @@ def get_warmup_samples(dataset):
       512,
       1024,
   ]
-  warmup_samples = [[], [], []]
-  for group_idx, group in enumerate(groupped_queries):
+  
+  for group_idx, group in enumerate(grouped_queries):
     for start, end in zip(interesting_buckets[:group_idx - 3], interesting_buckets[1:group_idx - 2]):
       for sample in group:
         if start < sample.true_length <= end:
           warmup_samples[group_idx].append(sample)
           log.info(f"Added sample of length {sample.true_length} for ({start}, {end}) bucket for group {group_idx}")
           break
-    warmup_samples[group_idx].extend(groupped_queries[group_idx][:50])
+    warmup_samples[group_idx].extend(grouped_queries[group_idx][:50])
   return warmup_samples
 
 class SUT:
@@ -226,21 +239,27 @@ class SUT:
 
     # self.replicated = self.offline_inf.engine.env.sharding_by_axis(-1)
     self._sample_id_to_input = None
-    self._groupped_queries = [[], [], []]
+    self._grouped_queries = init_grouped_queries()
+
 
   def issue_queries(self, queries):
     log.info("Issue queries start")
     assert self._sample_id_to_input is not None
     self._processed_data = []
     self._queries = queries
+    num_groups = len(self._grouped_queries)
+    assert num_groups > 0, "Invalid number of quer groups."
     for q in queries:
-      group = _classify_query(self.pandas_rows, q.index)
+      group = 0 if  num_groups == 1 else _classify_query(self.pandas_rows, q.index)
       input_data = copy.copy(self._sample_id_to_input[q.index])
       input_data.id = q.id
-      self._groupped_queries[group].append(input_data)
+      self._grouped_queries[group].append(input_data)
 
     log.info("Issue queries - classified queries")
-    assert len(self._queries) == sum(len(q) for q in self._groupped_queries)
+    num_queries = len(self._queries)
+    num_grouped_queries = [len(q) for q in self._grouped_queries]
+    msg = f"Number of queries {num_queries} does not match sum of {num_grouped_queries}"
+    assert num_queries == sum(num_grouped_queries), msg
     # At this point _processed_data is ready
     log.info("Issue queries end")
 
@@ -248,7 +267,7 @@ class SUT:
   def flush_queries(self):
     log.info("Flush queries start")
     start = time.perf_counter()
-    for group_idx, group in enumerate(self._groupped_queries):
+    for group_idx, group in enumerate(self._grouped_queries):
       log.info(f"Flush queries processing {group_idx} with {len(group)} samples")
       self.offline_inf[group_idx].init_decode_state()
       result = self.offline_inf[group_idx].batch_inference(group)
@@ -342,15 +361,17 @@ def main(argv):
   counts_by_bucket = _count_by_bucket(dataset)
   log.info(f"Counts by bucket {counts_by_bucket}")
 
-  #length_and_batch = (
-  #    (256, 216),
-  #    (512, 108),
-  #    (1024, 54),
-  #)
   len_batch_str = FLAGS.prefill_lengths_and_batch_sizes
   log.info(f"Prefill lengths and Batch sizes: {len_batch_str}")
   log.info(f"Maxengine args: {FLAGS.maxengine_args}")
   length_and_batch = [tuple(map(int, lb.split(','))) for lb in len_batch_str.split('|')]
+  
+  
+  if not FLAGS.skip_warmup:
+    warmup_samples = get_warmup_samples(dataset)
+  else:
+    "Skipping warmup."
+    warmup_samples = None
   engines = []
   params = None
   base_engine = None
@@ -370,16 +391,16 @@ def main(argv):
     params = offline_inf.params
     engines.append(offline_inf)
 
-  warmup_samples = get_warmup_samples(dataset)
-  with timed("warmup"):
-    warmup_grp = 0
-    for (length, _), engine in zip(length_and_batch, engines):
-      log.info(f"warm up for {length}")
-      engine.init_decode_state()
-      engine.warmup(length, warmup_samples[warmup_grp])
-      engine.decode_state = None  # drop state
-      gc.collect()
-      warmup_grp += 1
+  if warmup_samples:
+    with timed("warmup"):
+      warmup_grp = 0
+      for (length, _), engine in zip(length_and_batch, engines):
+        log.info(f"warm up for {length}")
+        engine.init_decode_state()
+        engine.warmup(length, warmup_samples[warmup_grp])
+        engine.decode_state = None  # drop state
+        gc.collect()
+        warmup_grp += 1
 
   sut = SUT(dataset, engines)
 
@@ -416,7 +437,7 @@ def main(argv):
   lg.StartTestWithLogSettings(
       lgSUT, qsl, settings, log_settings, FLAGS.audit_conf
   )
-  log.info(f"query counts {[len(q) for q in sut._groupped_queries]}")
+  log.info(f"query counts {[len(q) for q in sut._grouped_queries]}")
   log.info("Run Completed!")
   log.info("Destroying SUT...")
   lg.DestroySUT(lgSUT)

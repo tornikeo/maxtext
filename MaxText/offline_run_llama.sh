@@ -32,17 +32,15 @@ export DATA_DISK_DIR=/home/msingh/loadgen_run_data
 export API_URL=0.0.0.0:9000
 export DATASET_TYPE=full
 export DATASET_PATH=${DATA_DISK_DIR}/processed-data.pkl
-export PERF_SAMPLE_COUNT=1000
 export TOTAL_SAMPLE_COUNT=24576
-export LOG_INTERVAL=900
 export MODEL_NAME=llama70b
-export BATCH_SIZE_EXP=8
 # HF model id
 export BATCH_AND_PREFILL_LEN="256,80|512,40|1024,20"
 export QUANT="intmp"
 export QUANT_CFG="configs/quantization/${mp_config}.json"
 export SAVE_QUANT_PARAMS_PATH="gs://msingh-bkt/checkpoints/quant_llama2-70b-chat/${run_name}/${QUANT}_${mp_config}"
 export MAXENGINE_ARGS="quantization=${QUANT},quant_cfg_path=${QUANT_CFG},load_parameters_path=${SAVE_QUANT_PARAMS_PATH}"
+export SKIP_WARMUP=False
 
 LOADGEN_RUN_TIMESTAMP=$(TZ=America/Los_Angeles date +%Y%m%d%H%M%S%Z)
 
@@ -55,7 +53,7 @@ export LIBTPU_INIT_ARGS
 run_loadgen() {
 
   OUTPUT_LOG_ID=${MODEL_NAME}-${DATASET_TYPE}-${QUANT}-${mp_config}-${LOADGEN_RUN_TYPE}-${LOADGEN_RUN_TIMESTAMP}
-  OUTPUT_LOG_DIR=${DATA_DISK_DIR}/logs/${OUTPUT_LOG_ID}
+  OUTPUT_LOG_DIR=${DATA_DISK_DIR}/logs_warmup_${SKIP_WARMUP}/${OUTPUT_LOG_ID}
   mkdir -p ${OUTPUT_LOG_DIR} && cp ${USER_CONFIG} ${OUTPUT_LOG_DIR}
   OUTPUT_ACCURACY_JSON_PATH=${OUTPUT_LOG_DIR}/mlperf_log_accuracy.json
 
@@ -75,6 +73,7 @@ run_loadgen() {
 	  --mlperf_conf $BASEDIR/mlperf.conf \
 	  --user_conf ${USER_CONFIG} \
 	  --audit_conf ${AUDIT_CONF} \
+    --skip_warmup ${SKIP_WARMUP} \
 	  --total_sample_count ${TOTAL_SAMPLE_COUNT} \
 	  --dataset_path ${DATASET_PATH} \
     --prefill_lengths_and_batch_sizes ${BATCH_AND_PREFILL_LEN} \
@@ -113,17 +112,17 @@ run_loadgen_accuracy () {
 }
 
 
-# echo
-# echo "Starting loadgen performance run"
-# run_loadgen_performance
+echo
+echo "Starting loadgen performance run"
+run_loadgen_performance
 
 # echo
 # echo "Starting loadgen audit"
 # run_loadgen_audit
 
-echo
-echo "Starting loadgen accuracy"
-run_loadgen_accuracy
+# echo
+# echo "Starting loadgen accuracy"
+# run_loadgen_accuracy
 
 
 

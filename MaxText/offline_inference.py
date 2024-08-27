@@ -111,10 +111,11 @@ class OfflineInference:
     dummy_length = 1
 
     def decode():
-      log.debug("decode")
       nonlocal self
       nonlocal slot_to_id
+      nonlocal empty_slots
       nonlocal dummy_length
+      log.info(f"decode: filled_slots={len(slot_to_id)}, empty_slots={len(empty_slots)}")
       if self.dummy:
         log.debug("Dummy generate")
         res = engine_api.ResultTokens(
@@ -158,7 +159,7 @@ class OfflineInference:
         # to insert
         decode()
       # do one insert
-      log.debug(f"prefill {row.id}")
+      log.info(f"prefill: filled_slots={len(slot_to_id)}, empty_slots={len(empty_slots)}")
       slot = empty_slots.pop()
       first_token = prefill(slot, row.tokens, row.true_length)
       should_terminate = emit_first_token(row.id, first_token)
