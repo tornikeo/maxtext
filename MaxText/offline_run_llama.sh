@@ -4,6 +4,8 @@
 # bash offline_run_llama.sh -r drq -c mp_v0 -u user_5000.conf -n
 #
 #bash offline_run_llama.sh -r drq -c mp_v15 -nts
+# enable profiling uaing -p option
+# tensorboard --logdir /tmp/tensorboard/
 
 dry_run=false
 run_name='$(date +'%Y%m%d%H%M%S')'
@@ -11,13 +13,16 @@ mp_config="mp_scale"
 user_conf="user.conf"
 skip_warmup=false
 test_run=false
+enable_profiler=false
 
-while getopts "ntsr:c:u:" opt
+
+while getopts "ntspr:c:u:" opt
 do
   case "$opt" in
       n ) dry_run=true ;;
       t ) test_run=true ;;
       s ) skip_warmup=true;;
+      p ) enable_profiler=true;;
       r ) run_name="$OPTARG" ;;
       c ) mp_config="$OPTARG" ;;
       u ) user_conf="$OPTARG" ;;
@@ -35,6 +40,12 @@ if "$skip_warmup"; then
     SKIP_WARMUP_OPTION="--skip_warmup"
 else
     SKIP_WARMUP_OPTION=""
+fi
+
+if "$enable_profiler"; then
+    PROFILER_OPTION="--jax_profiler_port 9999"
+else
+    PROFILER_OPTION=""
 fi
 
 
@@ -99,7 +110,7 @@ run_loadgen() {
     --prefill_lengths_and_batch_sizes ${BATCH_AND_PREFILL_LEN} \
     --maxengine_args ${MAXENGINE_ARGS} \
 	  --output_log_dir ${OUTPUT_LOG_DIR} \
-    ${SKIP_WARMUP_OPTION} 2>&1 | tee ${OUTPUT_LOG_DIR}/${LOADGEN_RUN_TYPE}_log.log
+    ${SKIP_WARMUP_OPTION} ${PROFILER_OPTION} 2>&1 | tee ${OUTPUT_LOG_DIR}/${LOADGEN_RUN_TYPE}_log.log
 
 }
 

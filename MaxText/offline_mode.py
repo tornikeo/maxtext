@@ -96,6 +96,13 @@ flags.DEFINE_integer(
     required=False,
 )
 
+flags.DEFINE_integer(
+    'jax_profiler_port',
+    None,
+    'If set, the jax.profiler port to use.',
+    required=False,
+)
+
 flags.DEFINE_string(
     "output_log_dir",
     "output-logs",
@@ -151,11 +158,14 @@ def timed(msg):
 
 def _classify_query(dataset_rows, index):
   # return grouped indexes
+  len_batch_str = FLAGS.prefill_lengths_and_batch_sizes
+  target_inputs = [int(lb.split(',')[0]) for lb in len_batch_str.split('|')]
+  if len(target_inputs) == 1:
+    return 0
   sample = dataset_rows[index][1]
   input_len = sample.tok_input_length
   total_len = sample.tok_input_length + 1.5*sample.tok_output_length
-  len_batch_str = FLAGS.prefill_lengths_and_batch_sizes
-  target_inputs = [int(lb.split(',')[0]) for lb in len_batch_str.split('|')]
+  
   target_totals = [2*inp for inp in target_inputs]
 
   if total_len <= target_totals[0] and input_len <= target_inputs[0]:
@@ -183,7 +193,6 @@ def init_grouped_queries():
 
 def get_warmup_samples(dataset):
   grouped_queries = init_grouped_queries()
-  warmup_samples = grouped_queries
   pandas_rows = list(dataset.iterrows())
   input_data = {}
   for sample_id in range(len(pandas_rows)):
@@ -197,7 +206,7 @@ def get_warmup_samples(dataset):
     jax.block_until_ready(data.tokens)
   sample_id_to_input = input_data
   for sample_id in range(len(input_data)):
-    group = 0 if len(grouped_queries) == 1 else _classify_query(pandas_rows, sample_id)
+    group = _classify_query(pandas_rows, sample_id)
     input_ = copy.copy(sample_id_to_input[sample_id])
     input_.id = sample_id
     grouped_queries[group].append(input_)
@@ -212,7 +221,7 @@ def get_warmup_samples(dataset):
       512,
       1024,
   ]
-  
+  warmup_samples = init_grouped_queries()
   for group_idx, group in enumerate(grouped_queries):
     for start, end in zip(interesting_buckets[:group_idx - 3], interesting_buckets[1:group_idx - 2]):
       for sample in group:
@@ -221,6 +230,8 @@ def get_warmup_samples(dataset):
           log.info(f"Added sample of length {sample.true_length} for ({start}, {end}) bucket for group {group_idx}")
           break
     warmup_samples[group_idx].extend(grouped_queries[group_idx][:50])
+  num_warmup_samples = [len(samples) for samples in warmup_samples]
+  log.info(f'Num warmup_samples: {num_warmup_samples}')
   return warmup_samples
 
 class SUT:
@@ -248,10 +259,8 @@ class SUT:
     assert self._sample_id_to_input is not None
     self._processed_data = []
     self._queries = queries
-    num_groups = len(self._grouped_queries)
-    assert num_groups > 0, "Invalid number of quer groups."
     for q in queries:
-      group = 0 if  num_groups == 1 else _classify_query(self.pandas_rows, q.index)
+      group = _classify_query(self.pandas_rows, q.index)
       input_data = copy.copy(self._sample_id_to_input[q.index])
       input_data.id = q.id
       self._grouped_queries[group].append(input_data)
@@ -376,6 +385,9 @@ def main(argv):
     print("Get warmup samples")
     warmup_samples = get_warmup_samples(dataset)
 
+  if FLAGS.jax_profiler_port is not None:
+    server = jax.profiler.start_server(FLAGS.jax_profiler_port)
+    
   engines = []
   params = None
   base_engine = None
@@ -441,6 +453,7 @@ def main(argv):
       sut.LoadSamplesToRam,
       sut.UnloadSamplesFromRam,
   )
+
   log.info("Starting Benchmark run")
   lg.StartTestWithLogSettings(
       lgSUT, qsl, settings, log_settings, FLAGS.audit_conf
@@ -449,6 +462,8 @@ def main(argv):
   log.info("Run Completed!")
   log.info("Destroying SUT...")
   lg.DestroySUT(lgSUT)
+  if FLAGS.jax_profiler_port is not None:
+    jax.profiler.stop_server()
 
   log.info("Destroying QSL...")
   lg.DestroyQSL(qsl)
