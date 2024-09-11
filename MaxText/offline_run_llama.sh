@@ -43,7 +43,7 @@ else
 fi
 
 if "$enable_profiler"; then
-    PROFILER_OPTION="--jax_profiler_port 9999"
+    PROFILER_OPTION="--enable_profile"
 else
     PROFILER_OPTION=""
 fi
@@ -57,13 +57,15 @@ if "$test_run"; then
   export DATASET_PATH=${DATA_DISK_DIR}/processed-data.pkl
   export TOTAL_SAMPLE_COUNT=5000
   export USER_CONFIG=/home/msingh/maxtext/MaxText/user_${TOTAL_SAMPLE_COUNT}.conf
-  export BATCH_AND_PREFILL_LEN="1024,20"
+  export BATCH_AND_PREFILL_LEN="1024,30"
+  export BATCH_STR="1024-30"
 else
   export DATASET_TYPE=full
   export DATASET_PATH=${DATA_DISK_DIR}/processed-data.pkl
   export TOTAL_SAMPLE_COUNT=24576
   export USER_CONFIG=/home/msingh/maxtext/MaxText/${user_conf}
   export BATCH_AND_PREFILL_LEN="256,80|512,40|1024,20"
+  export BATCH_STR="256-80-512-40-1024-20"
 fi
 
 export MODEL_NAME=llama70b
@@ -84,7 +86,7 @@ export LIBTPU_INIT_ARGS
 
 run_loadgen() {
 
-  OUTPUT_LOG_ID=${MODEL_NAME}-${DATASET_TYPE}-${QUANT}-${mp_config}-${LOADGEN_RUN_TYPE}-skip_warmup_${skip_warmup}-${LOADGEN_RUN_TIMESTAMP}
+  OUTPUT_LOG_ID=${MODEL_NAME}-${DATASET_TYPE}-${TOTAL_SAMPLE_COUNT}-${QUANT}-${mp_config}-${LOADGEN_RUN_TYPE}-${BATCH_STR}-skip_warmup_${skip_warmup}-${LOADGEN_RUN_TIMESTAMP}
   OUTPUT_LOG_DIR=${DATA_DISK_DIR}/logs/${OUTPUT_LOG_ID}
   mkdir -p ${OUTPUT_LOG_DIR} && cp ${USER_CONFIG} ${OUTPUT_LOG_DIR}
   OUTPUT_ACCURACY_JSON_PATH=${OUTPUT_LOG_DIR}/mlperf_log_accuracy.json

@@ -98,8 +98,15 @@ flags.DEFINE_integer(
 
 flags.DEFINE_integer(
     'jax_profiler_port',
-    None,
+    9999,
     'If set, the jax.profiler port to use.',
+    required=False,
+)
+
+flags.DEFINE_bool(
+    'enable_profile',
+    False,
+    'If set, enable jax profiling.',
     required=False,
 )
 
@@ -288,9 +295,9 @@ class SUT:
         lg.FirstTokenComplete([make_response(key, [val[0]])])
         resp = make_response(key, val)
         lg.QuerySamplesComplete([resp])
-
-    log.info("Flush queries end")
     end = time.perf_counter()
+    log.info("Flush queries end")
+
 
   def LoadSamplesToRam(self, sample_list):
     """Pads the data, move them to jax array on device"""
@@ -353,8 +360,12 @@ def _count_by_bucket(dataset):
 def main(argv):
   del argv
   args = FLAGS
+  # os.environ["JAX_DEBUG_LOG_MODULES"] = "jax._src.compiler,jax._src.lru_cache"
   jax.config.update("jax_default_prng_impl", "unsafe_rbg")
-  #jax.config.update("jax_explain_cache_misses", True)
+  # jax.config.update("jax_explain_cache_misses", True)
+  
+  if FLAGS.enable_profile:
+    server = jax.profiler.start_server(FLAGS.jax_profiler_port)
 
   settings = lg.TestSettings()
   settings.scenario = lg.TestScenario.Offline
@@ -385,8 +396,7 @@ def main(argv):
     print("Get warmup samples")
     warmup_samples = get_warmup_samples(dataset)
 
-  if FLAGS.jax_profiler_port is not None:
-    server = jax.profiler.start_server(FLAGS.jax_profiler_port)
+  
     
   engines = []
   params = None
@@ -462,9 +472,10 @@ def main(argv):
   log.info("Run Completed!")
   log.info("Destroying SUT...")
   lg.DestroySUT(lgSUT)
-  if FLAGS.jax_profiler_port is not None:
+  
+  if FLAGS.enable_profile:
     jax.profiler.stop_server()
-
+    
   log.info("Destroying QSL...")
   lg.DestroyQSL(qsl)
 

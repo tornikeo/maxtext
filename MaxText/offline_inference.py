@@ -108,6 +108,7 @@ class OfflineInference:
 
     empty_slots = list(range(self.batch_size))
     slot_to_id = {}
+    num_prefill = 0
 
     dummy_length = 1
 
@@ -152,6 +153,7 @@ class OfflineInference:
         empty_slots.append(slot)
 
     for row in data:
+      num_prefill += 1
       log.debug(f"empty_slots {len(empty_slots)}")
       while not empty_slots:
         # If slots are all full, decode until there are free slots
@@ -159,7 +161,7 @@ class OfflineInference:
         log.info(f"decode-{desc}: filled_slots={len(slot_to_id)}, empty_slots={len(empty_slots)}")
         decode()
       # do one insert
-      log.info(f"prefill-{desc}: filled_slots={len(slot_to_id)}, empty_slots={len(empty_slots)}")
+      log.info(f"prefill-{desc}-{num_prefill}: filled_slots={len(slot_to_id)}, empty_slots={len(empty_slots)}")
       slot = empty_slots.pop()
       first_token = prefill(slot, row.tokens, row.true_length)
       should_terminate = emit_first_token(row.id, first_token)
@@ -175,6 +177,7 @@ class OfflineInference:
 
   def batch_inference(self, data: InputData, desc=""):
     """data is list of obj with id, tokens, and true length"""
+    
     res = defaultdict(list)
 
     def callback(id_, token):
