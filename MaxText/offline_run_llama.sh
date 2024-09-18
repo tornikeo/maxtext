@@ -64,17 +64,22 @@ else
   export DATASET_PATH=${DATA_DISK_DIR}/processed-data.pkl
   export TOTAL_SAMPLE_COUNT=24576
   export USER_CONFIG=/home/msingh/maxtext/MaxText/${user_conf}
-  export BATCH_AND_PREFILL_LEN="256,80|512,40|1024,20"
-  export BATCH_STR="256-80-512-40-1024-20"
+  #export BATCH_AND_PREFILL_LEN="256,80|512,40|1024,20"
+  #export BATCH_STR="256-80-512-40-1024-20"
+  export BATCH_AND_PREFILL_LEN="256,216|512,108|1024,54"
+  export BATCH_STR="256-216-512-108-1024-54"
 fi
 
 export MODEL_NAME=llama70b
 # HF model id
 
-export QUANT="intmp"
-export QUANT_CFG="configs/quantization/${mp_config}.json"
+#export QUANT="intmp"
+#export QUANT_CFG="configs/quantization/${mp_config}.json"
+export QUANT="int8"
+export QUANT_CFG=""
+export KV=True
 export SAVE_QUANT_PARAMS_PATH="gs://msingh-bkt/checkpoints/quant_llama2-70b-chat/${run_name}/${QUANT}_${mp_config}"
-export MAXENGINE_ARGS="quantization=${QUANT},quant_cfg_path=${QUANT_CFG},load_parameters_path=${SAVE_QUANT_PARAMS_PATH}"
+export MAXENGINE_ARGS="quantize_kvcache=${KV},quantization=${QUANT},quant_cfg_path=${QUANT_CFG},load_parameters_path=${SAVE_QUANT_PARAMS_PATH}"
 
 LOADGEN_RUN_TIMESTAMP=$(TZ=America/Los_Angeles date +%Y%m%d%H%M%S%Z)
 
@@ -86,7 +91,7 @@ export LIBTPU_INIT_ARGS
 
 run_loadgen() {
 
-  OUTPUT_LOG_ID=${MODEL_NAME}-${DATASET_TYPE}-${TOTAL_SAMPLE_COUNT}-${QUANT}-${mp_config}-${LOADGEN_RUN_TYPE}-${BATCH_STR}-skip_warmup_${skip_warmup}-${LOADGEN_RUN_TIMESTAMP}
+  OUTPUT_LOG_ID=${MODEL_NAME}-${DATASET_TYPE}-${TOTAL_SAMPLE_COUNT}-${QUANT}-${mp_config}-KV-${KV}-${LOADGEN_RUN_TYPE}-${BATCH_STR}-skip_warmup_${skip_warmup}-${LOADGEN_RUN_TIMESTAMP}
   OUTPUT_LOG_DIR=${DATA_DISK_DIR}/logs/${OUTPUT_LOG_ID}
   mkdir -p ${OUTPUT_LOG_DIR} && cp ${USER_CONFIG} ${OUTPUT_LOG_DIR}
   OUTPUT_ACCURACY_JSON_PATH=${OUTPUT_LOG_DIR}/mlperf_log_accuracy.json
