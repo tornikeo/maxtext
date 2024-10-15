@@ -14,15 +14,17 @@ enable_profiler=false
 performance=false
 audit=false
 accuracy=false
+enable_xla_flags=false
 
 
-while getopts "ntsepdar:" opt
+while getopts "ntsexpdar:" opt
 do
   case "$opt" in
       n ) dry_run=true ;;
       t ) test_run=true ;; 
       s ) skip_warmup=true ;;
       e ) enable_profiler=true ;;
+      x ) enable_xla_flags=true;;
       p ) performance=true ;;
       d ) audit=true ;;
       a ) accuracy=true ;;
@@ -63,6 +65,13 @@ then
   TOK_OUTLEN_MULTIPLIER="2.5"
 fi
 
+export LIBTPU_INIT_ARGS=""
+if "$enable_xla_flags"; then
+  export LIBTPU_INIT_ARGS="--xla_jf_auto_cross_replica_sharding=False --xla_tpu_enable_windowed_einsum_for_reduce_scatter=False --xla_tpu_enable_windowed_einsum_for_all_gather=False --xla_tpu_prefer_latch_optimized_rhs_layouts=True"
+fi
+echo "XLA_FLAGS:${LIBTPU_INIT_ARGS}"
+
+
 if [ -z "$MAXENGINE_ARGS" ];
 then
   CHECKPOINT="gs://msingh-bkt/checkpoints/quant_llama2-70b-chat/mlperf_070924/int8_"
@@ -94,7 +103,7 @@ export LIBTPU_INIT_ARGS
 
 run_loadgen() {
 
-  OUTPUT_LOG_ID=llama70b-${run_name}-${DATASET_TYPE}-${LOADGEN_RUN_TYPE}-${LOADGEN_RUN_TYPE}_${LOADGEN_RUN_TIMESTAMP}
+  OUTPUT_LOG_ID=llama70b-${run_name}-${DATASET_TYPE}-${LOADGEN_RUN_TYPE}_${LOADGEN_RUN_TIMESTAMP}
   OUTPUT_LOG_DIR=${DATA_DISK_DIR}/logs/${OUTPUT_LOG_ID}
   mkdir -p ${OUTPUT_LOG_DIR} && cp ${USER_CONFIG} ${OUTPUT_LOG_DIR}
   OUTPUT_ACCURACY_JSON_PATH=${OUTPUT_LOG_DIR}/mlperf_log_accuracy.json
