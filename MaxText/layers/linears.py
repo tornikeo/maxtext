@@ -433,7 +433,7 @@ class MoeBlock(nn.Module):
       layer_w0 = gmm(x, w0, group_sizes)
       layer_w0 = checkpoint_name(layer_w0, "mlpwi_0")
       layer_w1 = gmm(x, w1, group_sizes)
-      layer_w1 = checkpoint_name(layer_w0, "mlpwi_1")
+      layer_w1 = checkpoint_name(layer_w1, "mlpwi_1")
       layer_act = _convert_to_activation_function(self.config.mlp_activations[0])(layer_w0)
       intermediate_layer = jnp.multiply(layer_act, layer_w1)
       intermediate_output = gmm(intermediate_layer, wo, group_sizes)
@@ -604,6 +604,7 @@ class MoeBlock(nn.Module):
         )
       return output, loss
     else:
+      top_k_weights /= top_k_weights.sum(-1, keepdims=True)
       weights = self.reshape_and_update_weights(top_k_weights, top_k_indices)
       inputs = nn.with_logical_constraint(inputs, ("activation_batch", "activation_length", "activation_embed"))
       with jax.named_scope("wi_0"):
