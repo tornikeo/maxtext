@@ -14,7 +14,7 @@ source .env/bin/activate
 ```
 sudo apt-get install python3-dev
 sudo apt-get install build-essential -y
-git clone https://github.com/mlcommons/inference.git
+git clone git@github.com:mlcommons/inference.git
 cd inference/
 cd loadgen/ && pip install .
 ```
