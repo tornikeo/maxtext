@@ -391,6 +391,6 @@ class KVQuant:
   def einsum_fn_with_rhs_qtensor_and_dequant(self, value):
     return self.einsum_fn_with_rhs_qtensor(
       value,
-      rhs_dequant_mode=aqt_config.DequantMode.OTHER_INPUT,
+      rhs_dequant_mode=aqt_config.DequantMode.THIS_INPUT,
       rhs_calibration_mode=aqt_config.CalibrationMode.REMAINING_AXIS
       )
