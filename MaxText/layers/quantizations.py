@@ -348,6 +348,15 @@ class KVQuant:
     scale = kv.scale[0]
     dequant_kv = jnp.bfloat16(qvalue) * jnp.bfloat16(scale)
     return dequant_kv
+
+  def einsum_key_and_dequant(self, query: Array, kv: KVTensor):
+    assert isinstance(kv, KVTensor)
+    # (query * scale) * kv
+    scale = kv.scale[0]
+    scale = jnp.expand_dims(scale, (4))
+    temp = query * scale
+    result = jnp.einsum("btkgd,bskd->bkgts", temp, jnp.bfloat16(kv))
+    return result
     
   def einsum_fn_with_rhs_qtensor(
     self,
@@ -403,7 +412,7 @@ class KVQuant:
     return self.einsum_fn_with_rhs_qtensor(
       value,
       lhs_dequant_mode=aqt_config.DequantMode.THIS_INPUT,
-      lhs_calirbation_mode=aqt_config.CalibrationMode.REMAINING_AXIS,
+      lhs_calibration_mode=aqt_config.CalibrationMode.CONTRACTING_AXIS,
       rhs_dequant_mode=aqt_config.DequantMode.OTHER_INPUT,
       rhs_calibration_mode=aqt_config.CalibrationMode.REMAINING_AXIS
       )

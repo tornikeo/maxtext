@@ -418,10 +418,10 @@ class AttentionOp(nn.Module):
       n // n_kv: number of group for query, sometimes annotated with g
     """
     einsum = jnp.einsum
-    if self.kv_quant:
-      einsum = self.kv_quant.einsum_fn_with_rhs_qtensor(key)
-      # if isinstance(key, KVTensor):
-      #   key = self.kv_quant.dequant(key)
+    # if self.kv_quant:
+    #   einsum = self.kv_quant.einsum_fn_with_rhs_qtensor(key)
+    #   # if isinstance(key, KVTensor):
+    #   #   key = self.kv_quant.dequant(key)
     b, t, n, d = query.shape
     n_kv = key.shape[-2]
     assert n_kv == self.num_kv_heads
@@ -429,7 +429,10 @@ class AttentionOp(nn.Module):
       query = jnp.reshape(query, (b, t, n_kv, n // n_kv, d))
       if self.reshape_q and q_seq_len == 1:
         query = jnp.broadcast_to(query, (b, 2, n_kv, n // n_kv, d))
-      result = einsum("btkgd,bskd->bkgts", query, key)
+      if self.kv_quant:
+        result = self.kv_quant.einsum_key_and_dequant(query, key)
+      else:
+        result = einsum("btkgd,bskd->bkgts", query, key)
     elif self.compute_axis_order == (0,2,1,3):
       query = jnp.transpose(query, axes=self.compute_axis_order)
       key = jax.tree.map(lambda x: jnp.transpose(x, axes=self.compute_axis_order), key)
@@ -461,9 +464,9 @@ class AttentionOp(nn.Module):
 
     einsum = jnp.einsum
     if self.kv_quant:
-      einsum = self.kv_quant.einsum_fn_with_rhs_qtensor_and_dequant(value)
-      # if isinstance(value, KVTensor):
-      #   value = self.kv_quant.dequant(value)
+      # einsum = self.kv_quant.einsum_fn_with_rhs_qtensor_and_dequant(value)
+      if isinstance(value, KVTensor):
+        value = self.kv_quant.dequant(value)
     if model_mode == common_types.MODEL_MODE_TRAIN or self.compute_axis_order == (0,1,2,3):
       out = einsum("bkgts,bskd->btkgd", attn_weights, value)
       b, t, n_kv, g, d = out.shape
