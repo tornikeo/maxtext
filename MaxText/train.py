@@ -31,7 +31,6 @@ from typing import Sequence, Optional
 from absl import app
 from flax import linen as nn
 from flax.linen import partitioning as nn_partitioning
-import gkeutils
 import grain.python as grain
 import jax
 import numpy as np
@@ -635,9 +634,6 @@ def reshard_fn(config: pyconfig.HyperParameters):
 
 def train_loop(config):
   """Main Training loop."""
-  last_killed_step = 0
-  kill_slice_period = 14
-
   # Change global_batch_size_to_load, global_batch_size_to_train_on
   # Record to GCS about changes in number of slices (later)
 
@@ -650,7 +646,6 @@ def train_loop(config):
       writer,
       checkpoint_manager,
       state_mesh_shardings,
-      _,
       model,
       mesh,
       learning_rate_schedule,
@@ -751,12 +746,6 @@ def train_loop(config):
         if step % config.eu.save_period == 0:
           config.eu.save(jax.tree.map(lambda x: x.copy(), state))
 
-        if step > last_killed_step and step % kill_slice_period == 0:
-          kill_slice_index = 0  # py_random.randrange(0, config.eu.total_slice_count)
-          max_logging.log(f'{kill_slice_index=}, {step=}, {last_killed_step=}')
-          last_killed_step = max(last_killed_step, step)
-          gkeutils.try_kill_slice(kill_slice_index)
-
       new_time = datetime.datetime.now()
       record_scalar_metrics(
           metrics, new_time - last_step_completion, per_device_tflops, learning_rate_schedule(step), per_device_tokens
@@ -821,12 +810,6 @@ def train_loop(config):
       reshard_flag = config.eu.is_ready_to_reshard(step)
       if reshard_flag or step % config.eu.save_period == 0:
         config.eu.save(jax.tree.map(lambda x: x.copy(), state))
-
-      if step > last_killed_step and step % kill_slice_period == 0:
-        kill_slice_index = py_random.randint(0, config.eu.total_slice_count)
-        max_logging.log(f"{kill_slice_index=}, {step=}, {last_killed_step=}")
-        last_killed_step = max(last_killed_step, step)
-        gkeutils.try_kill_slice(kill_slice_index)
 
       step += 1
 
