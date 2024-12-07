@@ -579,13 +579,13 @@ def setup_train_loop(config):
 def reshard_fn(config: pyconfig.HyperParameters):
   """Reshard function."""
   # Mesh definition
-  step = config.eu.data.step
+  step = config.eu.data['step']
 
   init_rng, _, checkpoint_manager, mesh, model, _, tx = (
       setup_mesh_and_model(config)
   )
   data_iterator, _ = create_data_iterator(config, mesh)
-  _, _, state_mesh_shardings, data_iterator = max_utils.setup_training_state(
+  state, _, state_mesh_shardings, data_iterator = max_utils.setup_training_state(
       model,
       data_iterator,
       tx,
@@ -597,9 +597,14 @@ def reshard_fn(config: pyconfig.HyperParameters):
 
   shardings = jax.tree.map(
       lambda x: jax.sharding.NamedSharding(mesh, x.sharding.spec),
-      config.eu.data,
+      config.eu.data['state'],
   )
-  state = config.eu.reshard(config.eu.data, shardings)
+  resharded_state = config.eu.reshard(config.eu.data['state'], shardings)
+  state = state.replace(
+      params=resharded_state.params,
+      step=resharded_state.step,
+      opt_state=resharded_state.opt_state,
+  )
 
   (
       functional_train,
@@ -714,6 +719,7 @@ def train_loop(config):
   running_gcs_metrics = [] if config.gcs_metrics else None
 
   start_step = get_first_step(state)  # this is the start_step for training
+  start_step = 0
   first_profiling_step = start_step + config.skip_first_n_steps_for_profiler
   if config.profiler != "" and first_profiling_step >= config.steps:
     raise ValueError("Profiling requested but initial profiling step set past training final step")
@@ -723,6 +729,8 @@ def train_loop(config):
   last_step_completion = datetime.datetime.now()
   prof = profiler.Profiler(config)
   step = start_step
+
+  target_step = 6
 
   while step < config.steps and config.eu.failure_count < config.eu.max_failures:
     max_logging.log(f"{step=} {config.eu.failure_count=} {config.eu.good_slice_count=}")
@@ -744,7 +752,7 @@ def train_loop(config):
           state, metrics = p_train_step(state, example_batch, nextrng)
 
         if step % config.eu.save_period == 0:
-          config.eu.save(jax.tree.map(lambda x: x.copy(), state))
+          config.eu.save({'step': step, 'state': jax.tree.map(lambda x: x.copy(), state)})
 
       new_time = datetime.datetime.now()
       record_scalar_metrics(
@@ -809,7 +817,11 @@ def train_loop(config):
 
       reshard_flag = config.eu.is_ready_to_reshard(step)
       if reshard_flag or step % config.eu.save_period == 0:
-        config.eu.save(jax.tree.map(lambda x: x.copy(), state))
+        config.eu.save({'step': step, 'state': jax.tree.map(lambda x: x.copy(), state)})
+
+
+      if step % target_step == 0:
+        raise jax.errors.JaxRuntimeError("DATA_LOSS")
 
       step += 1
 
