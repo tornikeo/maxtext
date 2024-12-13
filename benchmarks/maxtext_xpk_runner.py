@@ -285,8 +285,9 @@ def build_user_command(
   for key, value in model.tuning_params.items():
     # If the user provides a number of steps use that, otherwise,
     # use the tuning params value.
-    if key == 'steps' and num_steps:
-      value = num_steps
+    if key == 'steps':
+      if num_steps:
+        value = num_steps
       steps_set = True
     config_tuning_params += f'{key}={value} '
 
