@@ -292,7 +292,7 @@ def build_user_command(
     config_tuning_params += f'{key}={value} '
 
   if not steps_set:
-    config_tuning_params += f'steps=20'
+    config_tuning_params += f'steps=20 '
 
   install_libtpu_cmd = ''
   if pathways_config.use_pathways:
