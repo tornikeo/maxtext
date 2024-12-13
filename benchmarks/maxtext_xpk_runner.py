@@ -308,6 +308,7 @@ def build_user_command(
   libtpu_flags = f"LIBTPU_INIT_ARGS='{model.xla_flags}'"
   jax_platforms = 'proxy' if pathways_config.use_pathways else 'tpu,cpu'
   vertex_tensorboard = 'vertex_tensorboard_project="" vertex_tensorboard_region=""' if pathways_config.use_pathways else ''
+  steps_config = f'steps={num_steps}' if num_steps else '' # default to whatever the config has.
 
   # Construct the command string with proper formatting and line continuations
   command = ' '.join([
@@ -320,7 +321,7 @@ def build_user_command(
       f'echo {buffer_size} &&',
       'export ENABLE_PJRT_COMPATIBILITY=true &&',
       'python3 MaxText/train.py MaxText/configs/base.yml',
-      f'{config_tuning_params}steps={num_steps}',
+      f'{config_tuning_params}{steps_config}',
       f'model_name={model.model_type}',
       f'base_output_directory={base_output_directory}',
       'use_vertex_tensorboard=false',
@@ -338,11 +339,16 @@ def generate_xpk_workload_cmd(
     libtpu_version: str,
     base_output_directory: str,
     buffer_size: int,
-    num_steps: int = 100,
+    num_steps: int,
     xpk_path: str = '~/xpk',
     pathways_config: PathwaysConfig = None,
 ):
   """Generates a command to run a maxstar model on XPK."""
+  if not num_steps and 'steps' in model.tuning_params:
+    num_steps = model.tuning_params['steps']
+  elif not num_steps:
+    num_steps = 20
+
   time.localtime()
   N = 3
   temp_post_fix = ''.join(
@@ -444,7 +450,11 @@ def run_xpk_workload(
   return run_command_with_updates(command, 'Run XPK workload', cluster_config)
 
 
-def xpk_benchmark_runner(cluster_config: XpkConfig, benchmarks: list[BenchmarkRunner], xpk_path: str):
+def xpk_benchmark_runner(
+    cluster_config: XpkConfig,
+    benchmarks: list[BenchmarkRunner],
+    xpk_path: str = '~/xpk',
+):
   xpk_workload_names = []
   xpk_workload_cmds = []
   for benchmark in benchmarks:
