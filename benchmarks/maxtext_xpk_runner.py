@@ -281,12 +281,17 @@ def build_user_command(
     pathways_config: PathwaysConfig = None,
 ):
   config_tuning_params = ''
+  steps_set = False
   for key, value in model.tuning_params.items():
     # If the user provides a number of steps use that, otherwise,
     # use the tuning params value.
     if key == 'steps' and num_steps:
       value = num_steps
+      steps_set = True
     config_tuning_params += f'{key}={value} '
+
+  if not steps_set:
+    config_tuning_params += f'steps=20'
 
   install_libtpu_cmd = ''
   if pathways_config.use_pathways:
