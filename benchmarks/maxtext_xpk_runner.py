@@ -307,26 +307,26 @@ def build_user_command(
   # Use single quotes for LIBTPU_INIT_ARGS and escape inner single quotes
   libtpu_flags = f"LIBTPU_INIT_ARGS='{model.xla_flags}'"
   jax_platforms = 'proxy' if pathways_config.use_pathways else 'tpu,cpu'
-  vertex_tensorboard = ' vertex_tensorboard_project="" vertex_tensorboard_region=""' if pathways_config.use_pathways else ''
+  vertex_tensorboard = 'vertex_tensorboard_project="" vertex_tensorboard_region=""' if pathways_config.use_pathways else ''
 
   # Construct the command string with proper formatting and line continuations
-  command = (
-      f'{install_libtpu_cmd}'
-      f' echo {libtpu_flags} &&'
-      f' export ENABLE_PATHWAYS_PERSISTENCE=1 &&'
-      f' export JAX_PLATFORMS={jax_platforms} &&'
-      f' export TPU_PREMAPPED_BUFFER_SIZE={buffer_size} &&'
-      f' echo {buffer_size} &&'
-      f' export ENABLE_PJRT_COMPATIBILITY=true &&'
-      f' export {libtpu_flags} &&'
-      ' python3 MaxText/train.py MaxText/configs/base.yml'
-      f' {config_tuning_params} steps={num_steps}'
-      f' model_name={model.model_type}'
-      f' base_output_directory={base_output_directory}'
-      f' use_vertex_tensorboard=false'
-      f' {vertex_tensorboard}'
-      f' run_name={name}'
-  )
+  command = ' '.join([
+      f'{install_libtpu_cmd}',
+      f'echo {libtpu_flags} &&' if not pathways_config.use_pathways else '',
+      f'export {libtpu_flags} &&' if not pathways_config.use_pathways else '',
+      'export ENABLE_PATHWAYS_PERSISTENCE=1 &&',
+      f'export JAX_PLATFORMS={jax_platforms} &&',
+      f'export TPU_PREMAPPED_BUFFER_SIZE={buffer_size} &&',
+      f'echo {buffer_size} &&',
+      'export ENABLE_PJRT_COMPATIBILITY=true &&',
+      'python3 MaxText/train.py MaxText/configs/base.yml',
+      f'{config_tuning_params}steps={num_steps}',
+      f'model_name={model.model_type}',
+      f'base_output_directory={base_output_directory}',
+      'use_vertex_tensorboard=false',
+      f'{vertex_tensorboard}',
+      f'run_name={name}'
+  ])
   return command
 
 
@@ -392,6 +392,7 @@ def generate_xpk_workload_cmd(
         ' --termination-grace-period-seconds=300'
         f' --pathways-gcs-location={base_output_directory}'
         f' --restart-on-user-code-failure'
+        f' --debug-dump-gcs={base_output_directory}'
     )
     docker_image_flag = (
         f'--docker-image={pathways_config.runner_image}'
