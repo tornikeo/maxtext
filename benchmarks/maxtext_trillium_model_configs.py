@@ -359,7 +359,7 @@ llama2_70b_4096 = MaxTextModel(
     ),
 )
 llama2_70b_4096_sc_synthetic = MaxTextModel(
-model_name="llama2-70b-4096",
+model_name="llama2_70b_4096_sc_synthetic",
 model_type="llama2-70b",
 tuning_params={
 "per_device_batch_size": 2,
@@ -386,7 +386,7 @@ xla_flags=(
 )
 
 llama2_70b_4096_sc_synthetic_pw_lr = MaxTextModel(
-model_name="llama2-70b-4096-pw-lr",
+model_name="llama2_70b_4096_sc_synthetic_pw_lr",
 model_type="llama2-70b",
 tuning_params={
         "per_device_batch_size": 2,
