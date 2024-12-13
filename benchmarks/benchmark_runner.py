@@ -162,7 +162,6 @@ def add_shared_arguments(custom_parser: argparse.ArgumentParser):
   custom_parser.add_argument(
       '--num_steps',
       type=int,
-      default='20',
       help='Number of steps to run benchmark for.',
   )
   custom_parser.add_argument(
