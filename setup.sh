@@ -110,6 +110,10 @@ if [[ "$MODE" == "pinned" ]]; then
     echo "pinned mode is supported for GPU builds only."
     exit 1
   fi
+
+# The base image of TE wheel is built with Python3.12 which is not available to Google yet. Disable prebuilt for now.
+#   pip3 install https://us-python.pkg.dev/gce-ai-infra/maxtext-build-support-packages/simple/transformer-engine/transformer_engine-1.13.0+e5edd6c-cp310-cp310-linux_x86_64.whl
+
   echo "Installing pinned jax, jaxlib for NVIDIA gpu."
   pip3 install "jax[cuda12]" -c constraints_gpu.txt
 elif [[ "$MODE" == "stable" || ! -v MODE ]]; then

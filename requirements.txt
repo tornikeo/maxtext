@@ -29,6 +29,7 @@ tensorflow-datasets
 tensorboardx
 tensorboard-plugin-profile
 tiktoken
+transformer-engine==1.13.0+e5edd6c
 transformers
 mlperf-logging@git+https://github.com/mlperf/logging.git
 google-jetstream
