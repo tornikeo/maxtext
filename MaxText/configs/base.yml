@@ -94,6 +94,10 @@ kv_quant_dtype: "int8"
 checkpoint_is_quantized: False # Set to True if reading from a saved aqt quantized checkpoint
 # Saves params quantized on fly at following path
 save_quantized_params_path: ""
+#Used to configure the mode in which model is called
+# when left as is, corresponds to training
+# accepted values are "inference" 
+model_call_mode: ""
 
 # Shard the range finding operation for quantization. By default this is set to number of slices.
 quantization_local_shard_count: -1
@@ -155,12 +159,14 @@ set_remat_policy_on_pipeline_iterations: True
 set_remat_policy_on_layers_per_stage: False
 
 
-# Choose 'remat_policy' between 'minimal', 'save_dot_except_mlpwi', 'save_dot_except_mlp', 'save_qkv_proj', 'qkv_proj_offloaded', 'custom' 'minimal_offloaded', 'save_out_proj' and 'full'.
+# Choose 'remat_policy' between 'minimal', 'save_dot_with_context_except_mlp', 'save_dot_except_mlpwi', 'save_dot_except_mlp',
+# 'save_qkv_proj', 'qkv_proj_offloaded', 'custom' 'minimal_offloaded', 'save_out_proj' and 'full'.
 # These options offer a trade-off between speed (fastest to slowest) and HBM usage (highest to lowest)
 remat_policy: 'full'
 # If custom_save_offload remat_policy is chosen, you can select tensors from the following list to offload on host memory, rematerialize or save on device memory.
 # Pick one of these options for following tensors: ['remat','device','offload']
 decoder_layer_input: 'device' # this tensor cannot be rematerialized - it serves as periodic checkpoints that act as the remat start points
+context: 'remat' # From https://github.com/NVIDIA/TransformerEngine/blob/main/transformer_engine/jax/attention.py#L581-L583
 mlpwi: 'remat'
 mlpwi_0: 'remat'
 mlpwi_1: 'remat'
@@ -208,6 +214,12 @@ local_checkpoint_directory: ""
 # It should be a positive number when and only when `enable_emergency_checkpoint` is True.
 local_checkpoint_period: 0
 
+# Whether or not to use emergency checkpoint with the replicator service.
+use_replicator_service: False
+
+# The interval to backup local checkpoints to the persistent storage.
+replicator_backup_interval_minutes: 0
+
 # Jax cache directory
 jax_cache_dir: "~/jax_cache"
 
@@ -219,9 +231,6 @@ mesh_axes: ['data', 'stage', 'fsdp', 'fsdp_transpose', 'sequence', 'tensor', 'ex
 logical_axis_rules: [
                       ['activation_batch', ['data', 'fsdp', 'fsdp_transpose', 'expert']],
                       ['activation_batch_no_exp', ['data', 'fsdp', 'fsdp_transpose']],
-                       # For pipeline parallelism the pre and post decoder layer tensors' batch dimension is sharded by stages.
-                       # Microbatches are sharded by stage, so moving out of and into this sharding should be a local reshape.
-                       # The "stage" needs to be listed first since the microbatch dimension is first before the reshape.
                       ['activation_embed_and_logits_batch', ['data', 'stage', 'fsdp', 'fsdp_transpose', 'expert']],
                       ['activation_heads', ['tensor','sequence']],
                       ['activation_kv_heads', ['tensor','sequence']],
@@ -259,6 +268,9 @@ logical_axis_rules: [
                     ]
 # Axes used for DCN must be earlier in this list than ICI, see (b/339009148) for details
 data_sharding: [['data', 'stage', 'fsdp', 'fsdp_transpose', 'sequence', 'tensor', 'expert', 'autoregressive']]
+
+# sharding tolerance: float between 0.0 and 1.0 representing the allowed percentage of non-sharded parameters.
+sharding_tolerance: 0.02
 
 # One axis for each parallelism type may hold a placeholder (-1)
 # value to auto-shard based on available slices and devices.
@@ -298,8 +310,14 @@ per_device_batch_size: 12.0
 expansion_factor_real_data: -1 # if -1 then all hosts will load real data, else total_hosts//expansion_factor_real_data will pull data from GCS.
 eval_per_device_batch_size: 0.0
 max_corpus_chars: 10_000_000
-train_data_column: 'text'
-eval_data_column: 'text'
+train_data_columns: ['text'] # for DPO dataset containing "chosen" and "rejected"
+eval_data_columns: ['text'] # for DPO dataset containing "chosen" and "rejected"
+
+# direct preference optimization (DPO)
+use_dpo: False 
+dpo_label_smoothing: 0.0
+dpo_beta: 0.1
+
 # dataset_type must be synthetic, hf, grain, tfds
 # details in: https://github.com/google/maxtext/blob/main/getting_started/Data_Input_Pipeline.md
 dataset_type: tfds
@@ -435,6 +453,9 @@ inference_microbenchmark_log_file_path: ""
 inference_metadata_file: "" # path to a json file
 enable_model_warmup: False
 
+# Stack prefill cache across the layer to reduce the
+# Python layer latency.
+stack_prefill_result_cache: False
 
 # KV Cache layout control
 # Logical layout: 0,1,2,3 ; CACHE_BATCH, CACHE_SEQUENCE, CACHE_HEADS, CACHE_KV
