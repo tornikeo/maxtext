@@ -223,24 +223,15 @@ class AttentionOp(nn.Module):
   ):
     self.check_attention_inputs(query, key, value)
     length = query.shape[-3]
-    if use_ragged_attention:
-      if model_mode == common_types.MODEL_MODE_AUTOREGRESSIVE:
-        if lengths is None:
-          lengths = jnp.sum(decoder_segment_ids, axis=-1)
+    if use_ragged_attention and model_mode == common_types.MODEL_MODE_AUTOREGRESSIVE:
+      if lengths is None:
+        lengths = jnp.sum(decoder_segment_ids, axis=-1)
 
-        if jax.devices()[0].platform == 'tpu':
-          impl = self.tpu_ragged_attention
-        if jax.devices()[0].platform == 'gpu':
-          impl = self.gpu_ragged_attention
-        return impl(query, key, value, lengths, self.ragged_block_size)
-      else:
-        """Pallas MHA kernel for prefill stage."""
-        if jax.devices()[0].platform == 'gpu':
-          key = jnp.repeat(key, self.num_query_heads // self.num_kv_heads, axis=2)
-          value = jnp.repeat(value, self.num_query_heads // self.num_kv_heads, axis=2)
-          sm_scale = 1.0 / math.sqrt(query.shape[-1])
-          out = pallas_attention.mha(query, key, value, decoder_segment_ids, sm_scale=sm_scale, causal=False)
-          return out, None, None
+      if jax.devices()[0].platform == 'tpu':
+        impl = self.tpu_ragged_attention
+      if jax.devices()[0].platform == 'gpu':
+        impl = self.gpu_ragged_attention
+      return impl(query, key, value, lengths, self.ragged_block_size)
     elif (
         self.attention_kernel == "dot_product"
         or (self.attention_kernel == "autoselected" and model_mode == common_types.MODEL_MODE_AUTOREGRESSIVE)
@@ -287,7 +278,7 @@ class AttentionOp(nn.Module):
     q_for_gqa = q.squeeze(axis=1)
 
     # Use the original gqa function to get the attention output
-    local_out_gqa, (local_sum, local_max) = pallas_decode_attention.gqa(q=q_for_gqa, k=k, v=v, kv_seq_len=lengths, block_k=block_size, return_residuals=True)
+    local_out_gqa, (local_sum, local_max) = pallas_decode_attention.gqa(q=q_for_gqa, k=k, v=v, kv_seq_len=lengths, block_k=block_size, sm_scale=1.0, return_residuals=True)
 
     # Reshape gqa's output to include q_length
     local_out = local_out_gqa.reshape(batch_size, q_length, q_heads, head_dim)
@@ -296,7 +287,7 @@ class AttentionOp(nn.Module):
     local_out = local_out.reshape(batch_size, q_length, q_heads, head_dim)
     local_max = local_max.reshape(batch_size, q_length, q_heads, 1)
     local_sum = local_sum.reshape(batch_size, q_length, q_heads, 1)
-    return local_out, local_max, local_sum
+    return local_out, local_sum, local_max
 
   def tpu_ragged_attention(
       self, query: Array, key: Array | KVTensor, value: Array | KVTensor, lengths: Array, block_size: int
