@@ -90,7 +90,7 @@ if [[ -z ${LIBTPU_GCS_PATH+x} ]] ; then
       build_stable_stack
     else
       if [[ ${MODE} == "pinned" ]]; then
-        export BASEIMAGE=ghcr.io/nvidia/jax:base-2024-05-07
+        export BASEIMAGE=ghcr.io/nvidia/jax:base-2024-12-11
       else
         export BASEIMAGE=ghcr.io/nvidia/jax:base
       fi

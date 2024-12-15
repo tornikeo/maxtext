@@ -1,7 +1,7 @@
 absl-py==2.1.0
 aiohappyeyeballs==2.4.4
 aiohttp==3.11.10
-aiosignal==1.3.1
+aiosignal==1.3.2
 annotated-types==0.7.0
 anyio==4.7.0
 aqtp==0.8.2
@@ -14,7 +14,7 @@ black==24.8.0
 blobfile==3.0.0
 build==1.2.2
 cachetools==5.5.0
-certifi==2024.8.30
+certifi==2024.12.14
 cfgv==3.4.0
 charset-normalizer==3.4.0
 chex==0.1.88
@@ -52,7 +52,7 @@ google-cloud-audit-log==0.3.0
 google-cloud-bigquery==3.27.0
 google-cloud-core==2.4.1
 google-cloud-logging==3.11.3
-google-cloud-resource-manager==1.13.1
+google-cloud-resource-manager==1.14.0
 google-cloud-storage==2.19.0
 google-crc32c==1.6.0
 google-jetstream==0.2.2
@@ -76,10 +76,10 @@ importlib_metadata==8.5.0
 importlib_resources==6.4.5
 iniconfig==2.0.0
 isort==5.13.2
-jax==0.4.38.dev20241212
-jax-cuda12-pjrt==0.4.38.dev20241212
-jax-cuda12-plugin==0.4.38.dev20241212
-jaxlib==0.4.38.dev20241212
+jax==0.4.38.dev20241211
+jax-cuda12-pjrt==0.4.38.dev20241211
+jax-cuda12-plugin==0.4.38.dev20241211
+jaxlib==0.4.38.dev20241211
 jaxtyping==0.2.36
 Jinja2==3.1.4
 jsonlines==4.0.0
@@ -105,7 +105,7 @@ mypy-extensions==1.0.0
 namex==0.0.8
 nest-asyncio==1.6.0
 networkx==3.4.2
-ninja==1.11.1.2
+ninja==1.11.1.3
 nodeenv==1.9.1
 numpy==2.0.2
 nvidia-cublas-cu12==12.6.4.1
@@ -181,7 +181,7 @@ six==1.17.0
 sniffio==1.3.1
 starlette==0.41.3
 tabulate==0.9.0
-tbp-nightly==2.19.0a20241212
+tbp-nightly==2.19.0a20241215
 tensorboard==2.18.0
 tensorboard-data-server==0.7.2
 tensorboard-plugin-profile==2.18.0
@@ -206,7 +206,7 @@ transformers==4.47.0
 typing_extensions==4.12.2
 tzdata==2024.2
 urllib3==2.2.3
-uvicorn==0.32.1
+uvicorn==0.34.0
 virtualenv==20.28.0
 Werkzeug==2.0.3
 wheel==0.37.1
