@@ -271,18 +271,15 @@ class AttentionOp(nn.Module):
     q_for_gqa = q.squeeze(axis=1)
 
     # Use the original gqa function to get the attention output
-    local_out_gqa, (local_sum, local_max) = pallas_decode_attention.gqa(
+    local_out, (local_sum, local_max) = pallas_decode_attention.gqa(
         q=q_for_gqa, k=k, v=v, kv_seq_len=lengths, block_k=block_size, sm_scale=1.0, return_residuals=True
     )
 
-    # Reshape gqa's output to include q_length
-    local_out = local_out_gqa.reshape(batch_size, q_length, q_heads, head_dim)
-
-    # Reshape local_max and local_sum to match Maxtext requirements
+    # Reshape local_out, local_max and local_sum to match Maxtext requirements
     local_out = local_out.reshape(batch_size, q_length, q_heads, head_dim)
     local_max = local_max.reshape(batch_size, q_length, q_heads, 1)
     local_sum = local_sum.reshape(batch_size, q_length, q_heads, 1)
-    return local_out, local_sum, local_max
+    return local_out, local_max, local_sum
 
   def tpu_ragged_attention(
       self, query: Array, key: Array | KVTensor, value: Array | KVTensor, lengths: Array, block_size: int
