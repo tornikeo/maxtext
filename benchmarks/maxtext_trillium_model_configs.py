@@ -358,8 +358,8 @@ llama2_70b_4096 = MaxTextModel(
         + xla_flags_library.CF_FOR_ALL_GATHER
     ),
 )
-llama2_70b_4096_sc_synthetic = MaxTextModel(
-    model_name="llama2_70b_4096_sc_synthetic",
+llama2_70b_4096_synthetic = MaxTextModel(
+    model_name="llama2_70b_4096_synthetic",
     model_type="llama2-70b",
     tuning_params={
         "per_device_batch_size": 2,
@@ -385,8 +385,8 @@ llama2_70b_4096_sc_synthetic = MaxTextModel(
     ),
 )
 
-llama2_70b_4096_sc_synthetic_pw_lr = MaxTextModel(
-    model_name="llama2_70b_4096_sc_synthetic_pw_lr",
+llama2_70b_4096_synthetic_pw_lr = MaxTextModel(
+    model_name="llama2_70b_4096_synthetic_pw_lr",
     model_type="llama2-70b",
     tuning_params={
         "per_device_batch_size": 2,
@@ -762,8 +762,8 @@ maxstar_models = [
     llama2_70b_4096_real_data_pw_long_run,
     llama3_8b_8192,  # Not Optimizied yet
     llama3_70b_8192,  # Not Optimizied yet
-    llama2_70b_4096_sc_synthetic_pw_lr,
-    llama2_70b_4096_sc_synthetic,
+    llama2_70b_4096_synthetic_pw_lr,
+    llama2_70b_4096_synthetic,
     llama3_1_405b_8192_fsdp_dcn,
     llama3_1_70b_129024,
     mixtral_8x7b_dropped,
