@@ -76,10 +76,10 @@ importlib_metadata==8.5.0
 importlib_resources==6.4.5
 iniconfig==2.0.0
 isort==5.13.2
-jax==0.4.38.dev20241211
-jax-cuda12-pjrt==0.4.38.dev20241211
-jax-cuda12-plugin==0.4.38.dev20241211
-jaxlib==0.4.38.dev20241211
+jax==0.4.38
+jax-cuda12-pjrt==0.4.38
+jax-cuda12-plugin==0.4.38
+jaxlib==0.4.38
 jaxtyping==0.2.36
 Jinja2==3.1.4
 jsonlines==4.0.0
