@@ -1,4 +1,4 @@
-FROM ghcr.io/nvidia/jax:maxtext-2024-12-11
+FROM ghcr.io/nvidia/jax:maxtext-2024-12-04
 
 WORKDIR /root
 ENV NVTE_FRAMEWORK=jax
