@@ -91,12 +91,10 @@ if [[ -z ${LIBTPU_GCS_PATH+x} ]] ; then
     else
       if [[ ${MODE} == "pinned" ]]; then
         export BASEIMAGE=ghcr.io/nvidia/jax:base-2024-12-04
-        export DOCKER_FILE=./maxtext_gpu_pinned_dependencies.Dockerfile
       else
         export BASEIMAGE=ghcr.io/nvidia/jax:base
-        export DOCKER_FILE=./maxtext_gpu_dependencies.Dockerfile
       fi
-      docker build --network host --build-arg MODE=${MODE} --build-arg JAX_VERSION=$JAX_VERSION --build-arg DEVICE=$DEVICE --build-arg BASEIMAGE=$BASEIMAGE -f $DOCKER_FILE -t ${LOCAL_IMAGE_NAME} .
+      docker build --network host --build-arg MODE=${MODE} --build-arg JAX_VERSION=$JAX_VERSION --build-arg DEVICE=$DEVICE --build-arg BASEIMAGE=$BASEIMAGE -f ./maxtext_gpu_dependencies.Dockerfile -t ${LOCAL_IMAGE_NAME} .
     fi
   else
     if [[ ${MODE} == "stable_stack" ]]; then
