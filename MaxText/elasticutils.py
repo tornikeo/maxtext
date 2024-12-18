@@ -162,6 +162,7 @@ class ElasticUtils:
         with timer(f"checking {slice_index=}"):
           if np.allclose(x, expected):
             good_slice_indices.add(slice_index)
+            logger.info(f"{slice_index=} good")
           else:
             logger.error(  # pylint: disable=logging-fstring-interpolation
                 f"Error with _simple_execution for {slice_index=}. "
@@ -175,6 +176,7 @@ class ElasticUtils:
           logger.info(f"{e}")
         else:
           logger.exception(f"Unknown JaxRuntimeError for {slice_index=}")  # pylint: disable=logging-fstring-interpolation
+        logger.info(f"{slice_index=} bad")
 
     return good_slice_indices
 

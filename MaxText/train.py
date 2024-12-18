@@ -26,7 +26,6 @@ import sys
 import functools
 import time
 import traceback
-import random as py_random
 
 from typing import Sequence, Optional
 from absl import app
@@ -95,7 +94,7 @@ def validate_train_config(config):
 
 def get_first_step(state):
   with jax.spmd_mode("allow_all"):
-    return int(state.step.item())
+    return int(state.step)
 
 
 def load_next_batch(train_iter, example_batch, config):
@@ -109,22 +108,13 @@ def load_next_batch(train_iter, example_batch, config):
 
 def record_scalar_metrics(metrics, step_time_delta, per_device_tflops, lr, per_device_tokens):
   """Records scalar metrics to be written to tensorboard"""
-  def log(d):
-    for k,v in d.items():
-      max_logging.log(f"{k} {type(v)}: {v}")
+  metrics["scalar"].update({"perf/step_time_seconds": step_time_delta.total_seconds()})
+  metrics["scalar"].update({"perf/per_device_tflops": per_device_tflops})
+  metrics["scalar"].update({"perf/per_device_tflops_per_sec": per_device_tflops / step_time_delta.total_seconds()})
+  metrics["scalar"].update({"perf/per_device_tokens": per_device_tokens})
+  metrics["scalar"].update({"perf/per_device_tokens_per_sec": per_device_tokens / step_time_delta.total_seconds()})
+  metrics["scalar"].update({"learning/current_learning_rate": lr})
 
-  update = {
-      "perf/step_time_syyeconds": step_time_delta.total_seconds(),
-      "perf/per_device_tflops": per_device_tflops,
-      "perf/per_device_tflops_per_sec": per_device_tflops / step_time_delta.total_seconds(),
-      "perf/per_device_tokens": per_device_tokens,
-      "perf/per_device_tokens_per_sec": per_device_tokens / step_time_delta.total_seconds(),
-      "learning/current_learning_rate": lr,
-  }
-
-  log(update)
-
-  metrics["scalar"].update(update)
 
 _buffered_step = None
 _buffered_metrics = None
@@ -172,6 +162,10 @@ def write_metrics_to_tensorboard(writer, metrics, step, config, is_training=True
   with jax.spmd_mode("allow_all"):
     if jax.process_index() == 0:
       for metric_name in metrics.get("scalar", []):
+        max_logging.log(f"{metric_name=}")
+        max_logging.log(f"{type(step)=}")
+        max_logging.log(f"{type(metrics['scalar'][metric_name])=}")
+        max_logging.log(f"{metrics['scalar'][metric_name]=}")
         writer.add_scalar(metric_name, np.array(metrics["scalar"][metric_name]), step)
       for metric_name in metrics.get("scalars", []):
         writer.add_scalars(metric_name, metrics["scalars"][metric_name], step)
@@ -589,11 +583,23 @@ def setup_train_loop(config):
 def reshard_fn(config: pyconfig.HyperParameters):
   """Reshard function."""
   clear_buffered_metrics()
-  step = config.eu.data['step']
 
-  init_rng, _, checkpoint_manager, mesh, model, _, tx = (
+  init_rng, _, checkpoint_manager, mesh, model, learning_rate_schedule, tx = (
       setup_mesh_and_model(config)
   )
+
+  def reshard(tree, mesh=mesh):
+    shardings = jax.tree.map(
+        lambda x: jax.sharding.NamedSharding(mesh, x.sharding.spec),
+        tree,
+    )
+    return config.eu.reshard(tree, shardings, donate=True)
+
+  step = reshard(config.eu.data['state'].step)
+  step_ret = step.item()
+  params = reshard(config.eu.data['state'].params)
+  opt_state = reshard(config.eu.data['state'].opt_state)
+
   data_iterator, _ = create_data_iterator(config, mesh)
   state, _, state_mesh_shardings, data_iterator = max_utils.setup_training_state(
       model,
@@ -605,18 +611,7 @@ def reshard_fn(config: pyconfig.HyperParameters):
       checkpoint_manager,
   )
 
-  def reshard(tree):
-    shardings = jax.tree.map(
-        lambda x: jax.sharding.NamedSharding(mesh, x.sharding.spec),
-        tree,
-    )
-    return config.eu.reshard(tree, shardings, donate=True)
-
-  state = state.replace(
-      step=reshard(config.eu.data['state'].step),
-      params=reshard(config.eu.data['state'].params),
-      opt_state=reshard(config.eu.data['state'].opt_state),
-  )
+  state = state.replace(step=step, params=params, opt_state=opt_state)
 
   (
       functional_train,
@@ -639,13 +634,14 @@ def reshard_fn(config: pyconfig.HyperParameters):
   example_batch = None
 
   return (
-      step,
+      step_ret,
       state,
       mesh,
       checkpoint_manager,
       data_iterator,
       p_train_step,
       example_batch,
+      learning_rate_schedule,
   )
 
 
@@ -731,7 +727,6 @@ def train_loop(config):
   running_gcs_metrics = [] if config.gcs_metrics else None
 
   start_step = get_first_step(state)  # this is the start_step for training
-  start_step = 0
   first_profiling_step = start_step + config.skip_first_n_steps_for_profiler
   if config.profiler != "" and first_profiling_step >= config.steps:
     raise ValueError("Profiling requested but initial profiling step set past training final step")
@@ -742,106 +737,104 @@ def train_loop(config):
   prof = profiler.Profiler(config)
   step = start_step
 
-  target_step = 1000
-
-  while step < config.steps and config.eu.failure_count < config.eu.max_failures:
-    max_logging.log(f"{step=} {config.eu.failure_count=} {config.eu.good_slice_count=}")
+  while True:
     try:
-      if step == first_profiling_step:
-        if config.profile_cleanly:
-          jax.block_until_ready(state)  # Block until previous state finishes to start profile cleanly
-        prof.activate()
+      with mesh, nn_partitioning.axis_rules(config.logical_axis_rules):
+        max_logging.log(f"{type(step)=}")
+        if step >= config.steps or config.eu.failure_count >= config.eu.max_failures:
+          break
+        max_logging.log(f"{step=} {config.eu.failure_count=} {config.eu.good_slice_count=}")
 
-      with jax.profiler.StepTraceAnnotation("train", step_num=step):
-        record_goodput(recorder, config, recorder.record_data_loading_start_time if recorder else None)
-        example_batch = load_next_batch(data_iterator, example_batch, config)
-        record_goodput(recorder, config, recorder.record_data_loading_end_time if recorder else None)
-        check_example_batch(config, example_batch=example_batch)
-        # pylint: disable=not-callable
-        nextrng = jax.jit(jax.random.fold_in)(init_rng, step)
-        record_goodput(recorder, config, recorder.record_step_start_time if recorder else None, step)
-        with mesh, nn_partitioning.axis_rules(config.logical_axis_rules):
+        if step == first_profiling_step:
+          if config.profile_cleanly:
+            jax.block_until_ready(state)  # Block until previous state finishes to start profile cleanly
+          prof.activate()
+
+        with jax.profiler.StepTraceAnnotation("train", step_num=step):
+          record_goodput(recorder, config, recorder.record_data_loading_start_time if recorder else None)
+          example_batch = load_next_batch(data_iterator, example_batch, config)
+          record_goodput(recorder, config, recorder.record_data_loading_end_time if recorder else None)
+          check_example_batch(config, example_batch=example_batch)
+          # pylint: disable=not-callable
+          nextrng = jax.jit(jax.random.fold_in)(init_rng, step)
+          record_goodput(recorder, config, recorder.record_step_start_time if recorder else None, step)
+
           state, metrics = p_train_step(state, example_batch, nextrng)
 
-        if step % config.eu.save_period == 0:
-          config.eu.save({'step': step, 'state': jax.tree.map(lambda x: x.copy(), state)})
+          if step % config.eu.save_period == 0:
+            jax.block_until_ready(state)
+            config.eu.save({'state': jax.tree.map(lambda x: x.copy(), state)})
 
-      new_time = datetime.datetime.now()
-      record_scalar_metrics(
-          metrics, new_time - last_step_completion, per_device_tflops, learning_rate_schedule(step), per_device_tokens
-      )
-      last_step_completion = new_time
+        new_time = datetime.datetime.now()
+        record_scalar_metrics(
+            metrics, new_time - last_step_completion, per_device_tflops, learning_rate_schedule(state.step), per_device_tokens
+        )
+        last_step_completion = new_time
 
-      if checkpoint_manager is not None:
-        if save_checkpoint(checkpoint_manager, int(step), state, config.dataset_type, data_iterator, config):
-          max_logging.log(f"saved a checkpoint at step {step}")
+        if checkpoint_manager is not None:
+          if save_checkpoint(checkpoint_manager, int(step), state, config.dataset_type, data_iterator, config):
+            max_logging.log(f"saved a checkpoint at step {step}")
 
-        # Upon preemption, exit when and only when all ongoing saves are complete.
-        if checkpoint_manager.reached_preemption(step):
-          checkpoint_manager.wait_until_finished()
-          sys.exit()
+          # Upon preemption, exit when and only when all ongoing saves are complete.
+          if checkpoint_manager.reached_preemption(step):
+            checkpoint_manager.wait_until_finished()
+            sys.exit()
 
-      write_metrics(writer, local_metrics_file, running_gcs_metrics, metrics, step, config)
+        write_metrics(writer, local_metrics_file, running_gcs_metrics, metrics, step, config)
 
-      if config.eval_interval > 0 and step > start_step and (step + 1) % config.eval_interval == 0:
-        assert eval_data_iterator
-        cumulative_eval_metrics = {
-            "scalar": {
-                "eval/total_loss": 0.0,
-                "eval/total_weights": 0.0,
-                "eval/avg_loss": 0.0,
-                "eval/moe_lb_loss": 0.0,
-            }
-        }
-        eval_step_count = 0
-        # pylint: disable=not-callable
-        for eval_batch in eval_data_iterator:
-          if config.eval_steps > 0 and eval_step_count >= config.eval_steps:
+        if config.eval_interval > 0 and step > start_step and (step + 1) % config.eval_interval == 0:
+          assert eval_data_iterator
+          cumulative_eval_metrics = {
+              "scalar": {
+                  "eval/total_loss": 0.0,
+                  "eval/total_weights": 0.0,
+                  "eval/avg_loss": 0.0,
+                  "eval/moe_lb_loss": 0.0,
+              }
+          }
+          eval_step_count = 0
+          # pylint: disable=not-callable
+          for eval_batch in eval_data_iterator:
+            if config.eval_steps > 0 and eval_step_count >= config.eval_steps:
+              break
+            with mesh, nn_partitioning.axis_rules(config.logical_axis_rules):
+              eval_metrics = p_eval_step(state, eval_batch, nextrng)
+            cumulative_eval_metrics["scalar"]["eval/total_loss"] += float(eval_metrics["scalar"]["evaluation/total_loss"])
+            cumulative_eval_metrics["scalar"]["eval/total_weights"] += float(eval_metrics["scalar"]["evaluation/total_weights"])
+            cumulative_eval_metrics["scalar"]["eval/moe_lb_loss"] += float(eval_metrics["scalar"]["evaluation/moe_lb_loss"])
+            max_logging.log(f"Completed eval step {eval_step_count}")
+            eval_step_count += 1
+          eval_loss = (
+              cumulative_eval_metrics["scalar"]["eval/total_loss"]
+              / (cumulative_eval_metrics["scalar"]["eval/total_weights"] + EPS)
+              + cumulative_eval_metrics["scalar"]["eval/moe_lb_loss"] / eval_step_count
+          )
+          cumulative_eval_metrics["scalar"]["eval/avg_loss"] = eval_loss
+          write_metrics(
+              writer, local_metrics_file, running_gcs_metrics, cumulative_eval_metrics, step, config, is_training=False
+          )
+          max_logging.log(
+              f"average loss after {step=}: {eval_step_count=}, {eval_loss=}, total_weights={cumulative_eval_metrics['scalar']['eval/total_weights']}"
+          )
+          if eval_loss <= config.target_eval_loss:
+            max_logging.log(f"Early stop and exit loop after reaching {config.target_eval_loss=}")
+            prof.deactivate()
             break
-          with mesh, nn_partitioning.axis_rules(config.logical_axis_rules):
-            eval_metrics = p_eval_step(state, eval_batch, nextrng)
-          cumulative_eval_metrics["scalar"]["eval/total_loss"] += float(eval_metrics["scalar"]["evaluation/total_loss"])
-          cumulative_eval_metrics["scalar"]["eval/total_weights"] += float(eval_metrics["scalar"]["evaluation/total_weights"])
-          cumulative_eval_metrics["scalar"]["eval/moe_lb_loss"] += float(eval_metrics["scalar"]["evaluation/moe_lb_loss"])
-          max_logging.log(f"Completed eval step {eval_step_count}")
-          eval_step_count += 1
-        eval_loss = (
-            cumulative_eval_metrics["scalar"]["eval/total_loss"]
-            / (cumulative_eval_metrics["scalar"]["eval/total_weights"] + EPS)
-            + cumulative_eval_metrics["scalar"]["eval/moe_lb_loss"] / eval_step_count
-        )
-        cumulative_eval_metrics["scalar"]["eval/avg_loss"] = eval_loss
-        write_metrics(
-            writer, local_metrics_file, running_gcs_metrics, cumulative_eval_metrics, step, config, is_training=False
-        )
-        max_logging.log(
-            f"average loss after {step=}: {eval_step_count=}, {eval_loss=}, total_weights={cumulative_eval_metrics['scalar']['eval/total_weights']}"
-        )
-        if eval_loss <= config.target_eval_loss:
-          max_logging.log(f"Early stop and exit loop after reaching {config.target_eval_loss=}")
+
+        if step == last_profiling_step:
+          if config.profile_cleanly:
+            jax.block_until_ready(state)  # Block until current state finishes to end profile cleanly
           prof.deactivate()
-          break
 
-      if step == last_profiling_step:
-        if config.profile_cleanly:
-          jax.block_until_ready(state)  # Block until current state finishes to end profile cleanly
-        prof.deactivate()
+        reshard_flag = config.eu.is_ready_to_reshard(step)
+        if reshard_flag or step % config.eu.save_period == 0:
+          jax.block_until_ready(state)
+          config.eu.save({'state': jax.tree.map(lambda x: x.copy(), state)})
 
-      reshard_flag = config.eu.is_ready_to_reshard(step)
-      if reshard_flag or step % config.eu.save_period == 0:
-        config.eu.save({'step': step, 'state': jax.tree.map(lambda x: x.copy(), state)})
-
-      if (step + 1) % target_step == 0:
-        target_step *= 2
-        raise jax.errors.JaxRuntimeError("DATA_LOSS")
-
-      step += 1
+        step += 1
 
     except jax.errors.JaxRuntimeError as e:
-      if "INTERNAL: Pipe from scheduler to aggregator" in str(e):
-        max_logging.log("Caught JaxRuntimeError INTERNAL exception")
-
-      elif "DATA_LOSS" in str(e):
+      if "DATA_LOSS" in str(e):
         max_logging.log("Caught JaxRuntimeError DATA_LOSS exception")
         max_logging.log(traceback.format_exc())
 
@@ -852,16 +845,28 @@ def train_loop(config):
       config.eu.slice_down()
       reshard_flag = True
 
-    if reshard_flag:
-      (step,
-       state,
-       mesh,
-       checkpoint_manager,
-       data_iterator,
-       p_train_step,
-       example_batch,) = reshard_fn(config)
-      reshard_flag = False
-      max_logging.log("Resharding complete. Retrying.")
+    while reshard_flag:
+      try:
+        (step,
+         state,
+         mesh,
+         checkpoint_manager,
+         data_iterator,
+         p_train_step,
+         example_batch,
+         learning_rate_schedule,) = reshard_fn(config)
+        max_logging.log("Resharding complete. Retrying.")
+        reshard_flag = False
+      except jax.errors.JaxRuntimeError as e:
+        if "DATA_LOSS" in str(e):
+          max_logging.log("Caught JaxRuntimeError DATA_LOSS exception during resharding!")
+          max_logging.log(traceback.format_exc())
+
+        else:
+          max_logging.log("Unknown JaxRuntimeError during resharding!")
+          raise
+
+        config.eu.slice_down()
 
   if checkpoint_manager is not None:
     checkpoint_manager.wait_until_finished()
