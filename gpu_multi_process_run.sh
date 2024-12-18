@@ -28,7 +28,7 @@ set_nccl_gpudirect_tcpx_specific_configuration() {
     export NCCL_P2P_PCI_CHUNKSIZE=524288
     export NCCL_PROTO=Simple
     export NCCL_SOCKET_IFNAME=eth0
-    export NVTE_FUSED_ATTN=1
+    # export NVTE_FUSED_ATTN=1
     export TF_CPP_MAX_LOG_LEVEL=100
     export TF_CPP_VMODULE=profile_guided_latency_estimator=10
     export XLA_PYTHON_CLIENT_MEM_FRACTION=0.85
