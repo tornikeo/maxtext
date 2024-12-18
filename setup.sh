@@ -112,7 +112,8 @@ if [[ "$MODE" == "pinned" ]]; then
   fi
 
   echo "Installing pinned jax, jaxlib for NVIDIA gpu."
-  pip3 install "jax[cuda12]" -c constraints_gpu.txt
+#   pip3 install "jax[cuda12]" -c constraints_gpu.txt
+  pip3 install -U --pre jax==0.4.35.dev20241008 jaxlib==0.4.34 jax-cuda12-plugin[with_cuda]==0.4.35.dev20241007 jax-cuda12-pjrt==0.4.35.dev20241007 -f https://storage.googleapis.com/jax-releases/jax_nightly_releases.html
   pip3 install transformer-engine[jax]
 #   pip3 install https://us-python.pkg.dev/gce-ai-infra/maxtext-build-support-packages/transformer-engine/transformer_engine-1.13.0+e5edd6c-cp310-cp310-linux_x86_64.whl
 
