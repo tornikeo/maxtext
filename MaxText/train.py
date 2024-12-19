@@ -68,6 +68,8 @@ from layers import quantizations
 from ml_goodput_measurement import goodput
 from ml_goodput_measurement import monitoring
 
+import elasticutils
+
 # pylint: disable=too-many-positional-arguments
 
 Transformer = models.Transformer
@@ -162,10 +164,10 @@ def write_metrics_to_tensorboard(writer, metrics, step, config, is_training=True
   with jax.spmd_mode("allow_all"):
     if jax.process_index() == 0:
       for metric_name in metrics.get("scalar", []):
-        max_logging.log(f"{metric_name=}")
-        max_logging.log(f"{type(step)=}")
-        max_logging.log(f"{type(metrics['scalar'][metric_name])=}")
-        max_logging.log(f"{metrics['scalar'][metric_name]=}")
+        # max_logging.log(f"{metric_name=}")
+        # max_logging.log(f"{type(step)=}")
+        # max_logging.log(f"{type(metrics['scalar'][metric_name])=}")
+        # max_logging.log(f"{metrics['scalar'][metric_name]=}")
         writer.add_scalar(metric_name, np.array(metrics["scalar"][metric_name]), step)
       for metric_name in metrics.get("scalars", []):
         writer.add_scalars(metric_name, metrics["scalars"][metric_name], step)
@@ -739,7 +741,7 @@ def train_loop(config):
 
   while True:
     try:
-      with mesh, nn_partitioning.axis_rules(config.logical_axis_rules):
+      with mesh, nn_partitioning.axis_rules(config.logical_axis_rules), elasticutils.watchdog(120):
         max_logging.log(f"{type(step)=}")
         if step >= config.steps or config.eu.failure_count >= config.eu.max_failures:
           break

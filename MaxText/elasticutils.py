@@ -4,7 +4,11 @@ import collections
 import contextlib
 import itertools
 import logging
+import os
+import sys
 import time
+import threading
+import traceback
 from typing import Sequence, Any, Optional
 import jax
 import numpy as np
@@ -12,6 +16,9 @@ import numpy as np
 PyTree = Any
 
 logger = logging.getLogger(__name__)
+
+logging.basicConfig(level=logging.INFO)
+logger.setLevel(logging.INFO)
 
 
 @contextlib.contextmanager
@@ -237,3 +244,21 @@ class ElasticUtils:
     else:
       raise ValueError(f"Unsupported type: {type(x)}")
 
+
+@contextlib.contextmanager
+def watchdog(timeout):
+  def handler():
+    for thread in threading.enumerate():
+      logger.info(f"Thread: {thread.ident}")
+      logger.info(''.join(traceback.format_stack(sys._current_frames()[thread.ident])))
+
+    logger.fatal("Timeout from timebomb!")
+    os.abort()
+
+  logger.info("Regestering watchdog")
+  timer = threading.Timer(timeout, handler)
+  timer.start()
+  try:
+    yield
+  finally:
+    timer.cancel()
