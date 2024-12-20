@@ -27,7 +27,7 @@ model_id = "meta-llama/Llama-3.1-8B"
 
 tokenizer = AutoTokenizer.from_pretrained(model_id)
 model = AutoModelForCausalLM.from_pretrained(
-    "/home/mohitkhatwani/maxtext/hf_llama3.1_new/",
+    "meta-llama/Llama-3.1-8B",
     torch_dtype=torch.float32,
 )
 
@@ -36,7 +36,7 @@ model = AutoModelForCausalLM.from_pretrained(
 prompt_texts = ["I love to"]
 all_data_to_save = []
 
-output_path = "golden_data_new_llama3_1_8b.jsonl"
+output_path = "golden_data_orig_llama3_1_8b.jsonl"
 
 
 for prompt_text in prompt_texts:

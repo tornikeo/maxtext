@@ -226,6 +226,10 @@ def convert_to_jax_weights(base_model_path, model_size):
     checkpoint = torch.load(ckpt_path, map_location="cpu")
     chkpt_vars[int(ckpt_path.name.split(".", maxsplit=2)[1])] = checkpoint
   chkpt_vars = [chkpt_vars[i] for i in sorted(list(chkpt_vars.keys()))]
+  import pickle
+  with open("original_hf.pkl", "wb") as f:
+    pickle.dump(chkpt_vars, f)
+  exit(0)
   # map weight names if they use HuggingFace instead of PyTorch convention
   chkpt_vars = [_HFNamespaceMapper(var) for var in chkpt_vars]
 
