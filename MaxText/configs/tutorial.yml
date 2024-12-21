@@ -14,7 +14,7 @@
 
 # This sentinel is a reminder to choose a real run name.
 # If there is already a checkpoint under this run, that checkpoint will auto-resume.
-run_name: "test_run"
+run_name: ""
 
 model_name: "default" # override config settings to match a specific model. other than the override, nothing should use this!
 normalization_layer_epsilon: 1.e-05
@@ -61,7 +61,7 @@ reuse_example_batch: 0 # for testing TPU performance, this options repeated uses
 
 metrics_file: "" # for testing, local file that stores scalar metrics. If empty, no metrics are written.
 # If true save metrics such as loss and TFLOPS to GCS in {base_output_directory}/{run_name}/metrics/
-gcs_metrics: False
+gcs_metrics: True
 
 # If true save config to GCS in {base_output_directory}/{run_name}/
 save_config_to_gcs: False
@@ -200,7 +200,7 @@ record_internal_nn_metrics: 0
 
 # Output directory
 # Create a GCS bucket, e.g. my-maxtext-outputs and set this to "gs://my-maxtext-outputs/"
-base_output_directory: ""
+base_output_directory: "gs://pangeai-tornikeo-tests/"
 
 # Whether or not to enable emergency checkpoint. If True, `local_checkpoint_directory` and a non-zero `local_checkpoint_period` must also be specified.
 # Emergency checkpoint is an experimental Orbax feature that: periodically saves to persistent storage and, with a larger invertal, saves to a local directory.
@@ -299,14 +299,14 @@ num_slices: -1
 
 # Tokenizer
 vocab_size: 32_000 # powers of 2 for sharding
-tokenizer_path: "assets/tokenizer.llama2"
+tokenizer_path: "google-t5/t5-large"
 tokenize_train_data: True  # False if the dataset is pre-tokenized
 tokenize_eval_data: True  # False if the dataset is pre-tokenized
 add_bos: True
 add_eos: True
 
 # Dataset
-per_device_batch_size: 12.0
+per_device_batch_size: 2
 expansion_factor_real_data: -1 # if -1 then all hosts will load real data, else total_hosts//expansion_factor_real_data will pull data from GCS.
 eval_per_device_batch_size: 0.0
 max_corpus_chars: 10_000_000
@@ -320,15 +320,17 @@ dpo_beta: 0.1
 
 # dataset_type must be synthetic, hf, grain, tfds
 # details in: https://github.com/google/maxtext/blob/main/getting_started/Data_Input_Pipeline.md
-dataset_type: tfds
+dataset_type: hf
+
 # for TFDS input pipeline (dataset_type=tfds)
 dataset_path: "" # your path given as argument in download_dataset.sh, e.g. "gs://my-maxtext-dataset/"
 dataset_name: 'c4/en:3.0.1'
 eval_dataset_name: 'c4/en:3.0.1'
 eval_split: 'validation'
+
 # for HuggingFace input pipeline (dataset_type=hf)
-hf_path: ''
-hf_data_dir: ''
+hf_path: 'allenai/c4'  # for using https://huggingface.co/datasets/allenai/c4
+hf_data_dir: 'en'
 hf_train_files: ''
 hf_eval_split: ''
 hf_eval_files: ''
@@ -360,7 +362,7 @@ learning_rate_schedule_steps: -1 # By default the length of the schedule is set 
 # However you may choose a longer schedule (learning_rate_schedule_steps > steps), in which case the training will end before
 # dropping fully down. Or you may choose a shorter schedule, where the unspecified steps will have a learning rate of 0.
 
-max_target_length: 2048 # Maximum sequence length
+max_target_length: 512 # Maximum sequence length
 max_prefill_predict_length: 64 # Maximum length for the prefill when doing autoregression
 prompt: "I love to" # Prompt for language model sampling.
 load_from_prefill_dir: False # If true, decode.py doesn't "prefill" but just reads from directory
@@ -369,7 +371,7 @@ autoregressive_decode_assert: ""
 
 # For nsys profiler, pass the training command to nsys command
 # e.g. nsys profile -s none --force-overwrite true --capture-range=cudaProfilerApi --capture-range-end=stop {training command}
-profiler: "" # Supported profiler: '', xplane, nsys
+profiler: "xplane" # Supported profiler: '', xplane, nsys
 # If set to true, upload all profiler results from all hosts. Otherwise, only upload the profiler result from the first host.
 upload_all_profiler_results: False
 # Skip first n steps for profiling, to omit things like compilation and to give
